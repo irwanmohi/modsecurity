@@ -915,6 +915,72 @@ push(@keep, "# END virtualmin-modsec");
 return &apply_changes();
 }
 
+# available_crs_exclusions()
+# Auto-detect which application exclusion packages the installed CRS ships
+# (e.g. wordpress, drupal, nextcloud...) by scanning its rule files.
+sub available_crs_exclusions
+{
+my (%seen, @out);
+foreach my $f (glob("$config{'crs_dir'}/rules/*-EXCLUSION-RULES.conf")) {
+	my ($name) = $f =~ m{-([A-Za-z0-9]+)-EXCLUSION-RULES\.conf$};
+	next if (!$name);
+	my $key = lc($name);
+	next if ($key eq 'crs');   # the generic BEFORE/AFTER-CRS files
+	next if ($seen{$key}++);
+	push(@out, $key);
+	}
+return sort @out;
+}
+
+# get_crs_exclusions()
+# Return a hash of the application exclusions we have enabled.
+sub get_crs_exclusions
+{
+my %on;
+my $f = $config{'crs_setup'};
+return %on if (!-r $f);
+my $in = 0;
+foreach my $l (@{&read_file_lines($f, 1)}) {
+	$in = 1 if ($l =~ /^#\s*BEGIN vmm-appexcl/);
+	$on{$1} = 1 if ($in && $l =~ /setvar:tx\.crs_exclusions_(\w+)=1/);
+	$in = 0 if ($l =~ /^#\s*END vmm-appexcl/);
+	}
+return %on;
+}
+
+# set_crs_exclusions(\@apps)
+# Write/replace a managed SecAction block in crs-setup.conf that enables the
+# CRS application exclusions for the given apps. Empty list removes the block.
+sub set_crs_exclusions
+{
+my ($apps) = @_;
+my @clean = grep { /^[a-z0-9]+$/ } @$apps;
+my $f = $config{'crs_setup'};
+return (0, "Cannot read $f") if (!-r $f);
+my $lref = &read_file_lines($f);
+my (@keep, $in);
+foreach my $l (@$lref) {
+	$in = 1 if ($l =~ /^#\s*BEGIN vmm-appexcl/);
+	push(@keep, $l) if (!$in);
+	$in = 0 if ($l =~ /^#\s*END vmm-appexcl/);
+	}
+if (@clean) {
+	my $gid = ($config{'id_base'} || 9000000) - 2;
+	push(@keep, "# BEGIN vmm-appexcl");
+	push(@keep, "SecAction \\");
+	push(@keep, "  \"id:$gid,phase:1,nolog,pass,t:none,\\");
+	for my $i (0 .. $#clean) {
+		my $end = ($i == $#clean) ? "\"" : ",\\";
+		push(@keep, "    setvar:tx.crs_exclusions_$clean[$i]=1$end");
+		}
+	push(@keep, "# END vmm-appexcl");
+	}
+@$lref = @keep;
+&backup_file($f);
+&flush_file_lines($f);
+return &apply_changes();
+}
+
 # tail_lines($file, $n)
 # Return the last $n lines of a file without slurping the whole thing.
 sub tail_lines

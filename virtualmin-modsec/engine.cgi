@@ -85,6 +85,24 @@ else {
 			&ui_textbox("an", $an, 5)." ".$text{'eng_anomaly_hint'});
 		print &ui_table_end();
 		print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
+
+		# Application (CMS) exclusions.
+		my @apps = &available_crs_exclusions();
+		if (@apps) {
+			my %enon = &get_crs_exclusions();
+			print &ui_form_start("save_engine.cgi", "post");
+			print &ui_hidden("section", "appexcl");
+			print &ui_table_start($text{'eng_appexcl'}, "width=100%", 2);
+			my $cells = "";
+			foreach my $a (@apps) {
+				$cells .= &ui_checkbox("excl_$a", 1, ucfirst($a),
+						       $enon{$a})."<br>\n";
+				}
+			print &ui_table_row($text{'eng_appexcl_apps'}, $cells);
+			print &ui_table_end();
+			print "<p><font size=-1>",$text{'eng_appexcl_hint'},"</font></p>\n";
+			print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
+			}
 		}
 	}
 

@@ -28,6 +28,10 @@ elsif ($sec eq "tune") {
 elsif ($sec eq "update_crs") {
 	($ok, $err) = &update_crs_apt();
 	}
+elsif ($sec eq "appexcl") {
+	my @apps = grep { $in{"excl_$_"} } &available_crs_exclusions();
+	($ok, $err) = &set_crs_exclusions(\@apps);
+	}
 else {
 	&error($text{'eng_badsec'});
 	}

@@ -159,6 +159,15 @@ From the dashboard, open **Engine & Core Rule Set settings** to:
   **Update CRS via apt**. The apt update installs the newest packaged version;
   major upstream jumps (3.x → 4.x) aren't auto-applied since they can break
   sites and need a manual migration.
+- Enable **Application Exclusions** — tick WordPress, Drupal, Nextcloud,
+  phpMyAdmin, etc. (auto-detected from the installed CRS) to load the CRS's
+  ready-made false-positive exclusions for those apps.
+
+> **CMS tuning note:** OWASP CRS works fine with WordPress and Joomla — at
+> **Paranoia Level 1** (the default). PL3–4 will flag normal CMS traffic as
+> attacks. For WordPress, also tick its Application Exclusion. The CRS has no
+> Joomla package, so for Joomla stay at PL1 and Allow the specific rules that
+> false-positive (use DetectionOnly first to find them).
 
 ### Per-domain engine mode
 

@@ -126,6 +126,9 @@ eng_pl1=least strict, fewest false positives
 eng_pl4=most strict, most false positives
 eng_anomaly=Inbound anomaly threshold
 eng_anomaly_hint=(lower = blocks more aggressively; default 5)
+eng_appexcl=Application Exclusions
+eng_appexcl_apps=Reduce false positives for
+eng_appexcl_hint=Tick the apps you run to load the CRS's ready-made exclusions for them (fewer false positives). Note: the CRS has no Joomla package — for Joomla use Paranoia 1 and Allow specific rules. Joomla/WordPress both work best at Paranoia level 1.
 
 allow_title=Allow Rule
 allow_err=Failed to allow rule
