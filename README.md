@@ -184,6 +184,41 @@ your system differs from the defaults:
 
 ---
 
+## Troubleshooting
+
+### Apache won't start after installing the CRS
+
+```
+Could not open configuration file /etc/modsecurity/crs/crs-setup.conf: No such file or directory
+```
+
+The CRS loader (`owasp-crs.load`) requires `crs-setup.conf`, but some package
+builds ship it only as a `.example`. Create the real file and restart:
+
+```bash
+sudo mkdir -p /etc/modsecurity/crs
+sudo cp /etc/modsecurity/crs/crs-setup.conf.example \
+        /etc/modsecurity/crs/crs-setup.conf   # adjust path if needed
+sudo rm -f /etc/modsecurity/zz-virtualmin-crs.conf   # drop any duplicate include
+sudo apache2ctl configtest && sudo systemctl restart apache2
+```
+
+Module **v0.2+** does this automatically (`ensure_crs_setup`) and won't add a
+second include when Apache already loads the CRS itself.
+
+### "Found another rule with the same id"
+
+The CRS is being loaded twice — usually because both Apache's stock
+`security2.conf` glob **and** the module's `zz-virtualmin-crs.conf` include it.
+Remove the module's copy and reload:
+
+```bash
+sudo rm -f /etc/modsecurity/zz-virtualmin-crs.conf
+sudo apache2ctl configtest && sudo systemctl restart apache2
+```
+
+---
+
 ## Uninstall
 
 In **Webmin Configuration → Webmin Modules**, select **ModSecurity Manager**

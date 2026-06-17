@@ -269,11 +269,53 @@ return (-d $config{'crs_dir'} || -r $config{'crs_load'}) ? 1 : 0;
 }
 
 # crs_enabled()
-# True if our managed include that activates the CRS is present.
+# True if the CRS is actually loaded -- either via our managed include, or via
+# Apache's stock security2.conf glob with crs-setup.conf in place.
 sub crs_enabled
 {
-my $f = $config{'crs_enable_file'};
-return (-r $f) ? 1 : 0;
+return 1 if (-r $config{'crs_enable_file'});
+return 1 if (&package_loads_crs() && -r $config{'crs_setup'});
+return 0;
+}
+
+# package_loads_crs()
+# True if Apache's stock security2.conf already globs the CRS loader. If so we
+# must NOT add a second include, or every rule loads twice and Apache refuses
+# to start ("another rule with the same id").
+sub package_loads_crs
+{
+foreach my $c ("/etc/apache2/mods-enabled/security2.conf",
+	       "/etc/apache2/mods-available/security2.conf") {
+	next if (!-r $c);
+	my $lref = &read_file_lines($c, 1);
+	foreach my $l (@$lref) {
+		next if ($l =~ /^\s*#/);
+		return 1 if ($l =~ /modsecurity-crs.*\.load/i ||
+			     $l =~ /\Q$config{'crs_load'}\E/);
+		}
+	}
+return 0;
+}
+
+# ensure_crs_setup()
+# owasp-crs.load hard-Includes crs-setup.conf. Some package builds ship it only
+# as a .example, so Apache won't start until the real file exists. Create it
+# from whatever template we can find. Returns 1 if the file exists afterwards.
+sub ensure_crs_setup
+{
+my $target = $config{'crs_setup'};
+return 1 if (-r $target);
+my ($dir) = $target =~ m{^(.*)/[^/]+$};
+&make_dir($dir, 0755) if ($dir && !-d $dir);
+foreach my $ex ($target.".example",
+		"$config{'crs_dir'}/crs-setup.conf.example",
+		"$config{'crs_dir'}/crs-setup.conf") {
+	if ($ex ne $target && -r $ex) {
+		&copy_source_dest($ex, $target);
+		return 1 if (-r $target);
+		}
+	}
+return 0;
 }
 
 # install_crs()
@@ -289,24 +331,41 @@ return &enable_crs();
 }
 
 # enable_crs()
-# Write a managed include file that loads the CRS, then reload Apache.
+# Make sure crs-setup.conf exists (or Apache won't start), then load the CRS.
+# Only adds our own include if Apache's stock config doesn't already load it,
+# to avoid loading every rule twice.
 sub enable_crs
 {
 &crs_installed() || return (0, "CRS is not installed");
+&ensure_crs_setup() ||
+	return (0, "Could not create $config{'crs_setup'} (no template found). ".
+		   "CRS not enabled to avoid breaking Apache.");
 my $f = $config{'crs_enable_file'};
-&open_tempfile(my $FH, ">$f", 1) || return (0, "Cannot write $f");
-&print_tempfile($FH, "# Managed by Virtualmin ModSecurity Manager.\n");
-&print_tempfile($FH, "IncludeOptional $config{'crs_load'}\n");
-&close_tempfile($FH);
+if (&package_loads_crs()) {
+	# Apache already loads the CRS itself; make sure our include is gone so
+	# rules don't load twice.
+	unlink($f) if (-e $f);
+	}
+else {
+	&open_tempfile(my $FH, ">$f", 1) || return (0, "Cannot write $f");
+	&print_tempfile($FH, "# Managed by Virtualmin ModSecurity Manager.\n");
+	&print_tempfile($FH, "IncludeOptional $config{'crs_load'}\n");
+	&close_tempfile($FH);
+	}
 return &apply_changes();
 }
 
 # disable_crs()
-# Remove the managed CRS include and reload.
+# Remove our managed include and reload. If Apache loads the CRS via its own
+# stock config, report that the user must disable it there.
 sub disable_crs
 {
 my $f = $config{'crs_enable_file'};
 unlink($f) if (-e $f);
+if (&package_loads_crs()) {
+	return (0, "The CRS is loaded by Apache's own security2.conf. ".
+		   "Disable it there (or run 'a2dismod security2') to turn it off.");
+	}
 return &apply_changes();
 }
 
