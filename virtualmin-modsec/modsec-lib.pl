@@ -431,7 +431,7 @@ return @out;
 sub managed_paths
 {
 my @keys = qw(modsec_conf crs_setup exclusion_file domain_engine_file
-	      ip_whitelist_file crs_enable_file);
+	      ip_whitelist_file ip_blocklist_file crs_enable_file);
 return grep { $_ } map { $config{$_} } @keys;
 }
 
@@ -507,6 +507,97 @@ my @lines = (
 	"SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
 	"    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=Off\"");
 return &write_test_rollback($f, \@lines, $old);
+}
+
+# add_ip_whitelist($ip)
+# Append a single IP to the trusted whitelist (no-op if already present).
+sub add_ip_whitelist
+{
+my ($ip) = @_;
+$ip =~ s/^\s+|\s+$//g;
+&valid_ip_entry($ip) || return (0, "Invalid IP/CIDR: $ip");
+my @ips = &get_ip_whitelist();
+return (1) if (grep { $_ eq $ip } @ips);
+push(@ips, $ip);
+return &set_ip_whitelist(\@ips);
+}
+
+# get_ip_blocklist()
+# Return the list of IPs/CIDRs that are denied outright.
+sub get_ip_blocklist
+{
+my @ips;
+my $f = $config{'ip_blocklist_file'};
+return @ips if (!-r $f);
+foreach my $l (@{&read_file_lines($f, 1)}) {
+	if ($l =~ /^#\s*virtualmin-modsec-ipblocklist:\s*(.*\S)/) {
+		@ips = split(/\s*,\s*/, $1);
+		}
+	}
+return @ips;
+}
+
+# set_ip_blocklist(\@ips)
+# Replace the IP blocklist with @ips (one ipMatch rule that denies them with
+# 403), then reload with rollback on failure.
+sub set_ip_blocklist
+{
+my ($ips) = @_;
+my @clean;
+foreach my $ip (@$ips) {
+	$ip =~ s/^\s+|\s+$//g;
+	next if ($ip eq "");
+	&valid_ip_entry($ip) || return (0, "Invalid IP/CIDR: $ip");
+	push(@clean, $ip);
+	}
+my $f = $config{'ip_blocklist_file'};
+my $old = -r $f ? &read_file_contents($f) : undef;
+if (!@clean) {
+	unlink($f) if (-e $f);
+	return &apply_changes();
+	}
+my $gid = ($config{'id_base'} || 9000000) + 300000;
+my $list = join(",", @clean);
+my @lines = (
+	"# Managed by Virtualmin ModSecurity Manager - IP blocklist.",
+	"# virtualmin-modsec-ipblocklist: $list",
+	"SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
+	"    \"id:$gid,phase:1,deny,status:403,log,".
+	"msg:'IP blocked by ModSecurity Manager'\"");
+return &write_test_rollback($f, \@lines, $old);
+}
+
+# add_ip_blocklist($ip)
+# Append a single IP to the blocklist (no-op if already present).
+sub add_ip_blocklist
+{
+my ($ip) = @_;
+$ip =~ s/^\s+|\s+$//g;
+&valid_ip_entry($ip) || return (0, "Invalid IP/CIDR: $ip");
+my @ips = &get_ip_blocklist();
+return (1) if (grep { $_ eq $ip } @ips);
+push(@ips, $ip);
+return &set_ip_blocklist(\@ips);
+}
+
+# group_by_ip(\@events)
+# Aggregate events by client IP. Returns hash refs sorted by hit count desc:
+# ip, count, blocked, domains (hashref), last_id, last_uri, last_msg.
+sub group_by_ip
+{
+my ($events) = @_;
+my %g;
+foreach my $e (@$events) {
+	my $ip = $e->{'client'} || "-";
+	$g{$ip} ||= { ip => $ip, count => 0, blocked => 0, domains => {} };
+	$g{$ip}->{'count'}++;
+	$g{$ip}->{'blocked'}++ if ($e->{'action'} eq 'blocked');
+	$g{$ip}->{'domains'}->{$e->{'hostname'}}++ if ($e->{'hostname'});
+	$g{$ip}->{'last_id'}  = $e->{'id'};
+	$g{$ip}->{'last_uri'} = $e->{'uri'};
+	$g{$ip}->{'last_msg'} = $e->{'msg'};
+	}
+return sort { $b->{'count'} <=> $a->{'count'} } values %g;
 }
 
 # set_engine_state($value)

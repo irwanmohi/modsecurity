@@ -19,6 +19,9 @@ the rule engine and install/tune the OWASP Core Rule Set.
   one parameter of a rule instead of the whole rule (`ctl:ruleRemoveTargetById`).
 - **Trusted IP whitelist** — let your admin/office IPs, monitoring, or payment
   callbacks bypass ModSecurity entirely (`@ipMatch`).
+- **By-IP view + blocklist** — see attempts grouped by client IP (hits, blocks,
+  domains targeted) and one-click **whitelist** a trusted IP or **block** an
+  attacker (denied with 403).
 - **Undo anything** — list all applied exclusions and remove them. Allowed
   rules are hidden from the dashboard so the list only shows what still needs
   attention.
@@ -127,6 +130,17 @@ Open **Trusted IP whitelist** from the dashboard and enter one IP or CIDR per
 line (IPv4 or IPv6). Requests from those addresses bypass ModSecurity entirely
 — ideal for your admin IP, monitoring probes, or payment-gateway callbacks that
 keep tripping the rules.
+
+### Events by IP (whitelist or block attackers)
+
+Open **By IP** from the dashboard to see events grouped by the client IP that
+caused them, with hit counts, how many were blocked, and which domains were
+targeted. From there:
+
+- **Whitelist** an IP you recognise (it bypasses ModSecurity) — useful when a
+  legitimate client keeps tripping rules.
+- **Block** an IP that's clearly attacking you — it's denied with HTTP 403 on
+  every site. Manage the full list under **IP blocklist**.
 
 ### 3. Review / remove exclusions
 

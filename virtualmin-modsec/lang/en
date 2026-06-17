@@ -33,6 +33,27 @@ index_ipwhitelist=Trusted IP whitelist
 index_livelog=Live log
 index_stats=Statistics
 index_backups=Backups
+index_byip=By IP
+index_ipblock=IP blocklist
+
+byip_title=Events by Client IP
+byip_none=No ModSecurity events found yet.
+byip_intro=ModSecurity events grouped by the IP that triggered them. Whitelist an IP you trust (it will bypass ModSecurity), or block an IP that's attacking you (denied with 403).
+byip_lastrule=Last rule
+byip_wl=Whitelist
+byip_bl=Block
+byip_iswl=whitelisted
+byip_isbl=blocked
+byip_return=by IP
+byip_wlsure=Whitelist IP $1? Requests from this address will bypass ModSecurity entirely on all sites.
+byip_blsure=Block IP $1? Requests from this address will be denied with HTTP 403 on all sites.
+byip_wlerr=Failed to whitelist IP
+byip_blerr=Failed to block IP
+
+ipbl_title=IP Blocklist
+ipbl_intro=Requests from these IP addresses are denied with HTTP 403 on all sites.
+ipbl_hint=One IP or CIDR range per line (IPv4 or IPv6). Leave empty to remove the blocklist.
+ipbl_err=Failed to apply IP blocklist
 index_hidden=$1 already-allowed rule(s) hidden from this list. See applied exclusions to review or undo them.
 
 tail_title=Live ModSecurity Log
