@@ -44,28 +44,69 @@ if ($config{'audit_format'} eq 'json' && -r $config{'audit_log'}) {
 return &parse_blocks_native();
 }
 
+# log_files()
+# Return the list of Apache error logs to scan. Virtualmin gives every domain
+# its own error log, so we gather them from each vhost's ErrorLog directive
+# plus optional globs (home-dir logs), and always include the global one.
+# An explicit "log_files" config overrides auto-discovery.
+sub log_files
+{
+my @files;
+if ($config{'log_files'} =~ /\S/) {
+	@files = split(/\s+/, $config{'log_files'});
+	}
+else {
+	push(@files, $config{'error_log'}) if ($config{'error_log'});
+	# ErrorLog paths from each Apache/Virtualmin vhost.
+	my $dir = $config{'apache_sites'};
+	if ($dir && -d $dir) {
+		foreach my $vf (glob("$dir/*.conf")) {
+			my $lref = &read_file_lines($vf, 1);
+			foreach my $l (@$lref) {
+				next if ($l =~ /^\s*#/);
+				if ($l =~ /^\s*ErrorLog\s+"?(\S+?)"?\s*$/i) {
+					# Skip piped logs and unresolved variables.
+					push(@files, $1) if ($1 =~ m{^/});
+					}
+				}
+			}
+		}
+	# Extra globs (e.g. home-dir logs).
+	foreach my $g (split(/\s+/, $config{'extra_log_globs'})) {
+		push(@files, glob($g));
+		}
+	}
+# Dedupe and keep only readable files.
+my (%seen, @out);
+foreach my $f (@files) {
+	next if (!$f || $seen{$f}++);
+	push(@out, $f) if (-r $f);
+	}
+return @out;
+}
+
 # parse_blocks_native()
-# Parse ModSecurity messages out of the Apache error.log.
+# Parse ModSecurity messages out of every discovered Apache error log.
 sub parse_blocks_native
 {
-my $log = $config{'error_log'};
 my @out;
-return @out if (!-r $log);
-# Read at most max_lines from the tail of the file to stay fast.
-my @lines = &tail_lines($log, $config{'max_lines'} || 20000);
-foreach my $l (@lines) {
-	next if ($l !~ /ModSecurity:/);
-	my %e;
-	($e{'id'})       = $l =~ /\[id\s+"([^"]*)"\]/;
-	($e{'msg'})      = $l =~ /\[msg\s+"([^"]*)"\]/;
-	($e{'hostname'}) = $l =~ /\[hostname\s+"([^"]*)"\]/;
-	($e{'uri'})      = $l =~ /\[uri\s+"([^"]*)"\]/;
-	($e{'severity'}) = $l =~ /\[severity\s+"([^"]*)"\]/;
-	($e{'client'})   = $l =~ /\[client\s+([0-9a-fA-F\.:]+)/;
-	$e{'action'} = ($l =~ /Access denied/i) ? "blocked" : "warning";
-	($e{'time'}) = $l =~ /^\[([^\]]+)\]/;
-	next if (!$e{'id'});      # skip non-rule lines (startup, etc.)
-	push(@out, \%e);
+my $per = $config{'max_lines'} || 20000;
+foreach my $log (&log_files()) {
+	# Read at most max_lines from the tail of each file to stay fast.
+	foreach my $l (&tail_lines($log, $per)) {
+		next if ($l !~ /ModSecurity:/);
+		my %e;
+		($e{'id'})       = $l =~ /\[id\s+"([^"]*)"\]/;
+		($e{'msg'})      = $l =~ /\[msg\s+"([^"]*)"\]/;
+		($e{'hostname'}) = $l =~ /\[hostname\s+"([^"]*)"\]/;
+		($e{'uri'})      = $l =~ /\[uri\s+"([^"]*)"\]/;
+		($e{'severity'}) = $l =~ /\[severity\s+"([^"]*)"\]/;
+		($e{'client'})   = $l =~ /\[client\s+([^\]\s]+?)(?::\d+)?\]/;
+		$e{'action'} = ($l =~ /Access denied/i) ? "blocked" : "warning";
+		($e{'time'}) = $l =~ /^\[([^\]]+)\]/;
+		next if (!$e{'id'});      # skip non-rule lines (startup, etc.)
+		push(@out, \%e);
+		}
 	}
 return @out;
 }
@@ -114,9 +155,11 @@ foreach my $e (@$events) {
 	if (!$g{$key}) {
 		$g{$key} = { id => $e->{'id'}, hostname => $e->{'hostname'},
 			     msg => $e->{'msg'}, severity => $e->{'severity'},
-			     count => 0 };
+			     action => 'warning', count => 0 };
 		}
 	$g{$key}->{'count'}++;
+	# A group counts as "blocked" if any of its events were denied.
+	$g{$key}->{'action'} = 'blocked' if ($e->{'action'} eq 'blocked');
 	$g{$key}->{'last_uri'} = $e->{'uri'};
 	$g{$key}->{'last_client'} = $e->{'client'};
 	}

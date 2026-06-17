@@ -1,4 +1,7 @@
 error_log=/var/log/apache2/error.log
+log_files=
+apache_sites=/etc/apache2/sites-enabled
+extra_log_globs=/home/*/logs/error_log /var/log/virtualmin/*_error_log
 audit_log=/var/log/apache2/modsec_audit.log
 audit_format=native
 exclusion_file=/etc/modsecurity/virtualmin-modsec-exclusions.conf

@@ -1,4 +1,7 @@
-error_log=1,Apache error log path,0
+error_log=1,Fallback / global Apache error log path,0
+log_files=10,Explicit list of error logs to scan (blank = auto-discover),3,5
+apache_sites=11,Apache vhosts directory to read ErrorLog from,0
+extra_log_globs=12,Extra error-log globs to scan (space-separated),0
 audit_log=2,ModSecurity audit log path,0
 audit_format=3,Audit log format,1,native:Native (serial),json:JSON
 exclusion_file=4,Exclusion rules file (auto-loaded by ModSecurity),0

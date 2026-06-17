@@ -13,6 +13,10 @@ my $statetext = $state ? $state : $text{'index_unknown'};
 print &ui_table_start($text{'index_status'}, "width=100%", 2);
 print &ui_table_row($text{'index_engine'}, "<b>$statetext</b>");
 print &ui_table_row($text{'index_conf'}, "<tt>$config{'modsec_conf'}</tt>");
+my @logs = &log_files();
+print &ui_table_row($text{'index_logs'},
+	scalar(@logs)." &nbsp; <font size=-1><a href=logs.cgi>"
+	.$text{'index_logs_view'}."</a></font>");
 print &ui_table_end();
 print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),
       " &nbsp;|&nbsp; ",&ui_link("domains.cgi", $text{'index_perdomain'}),
@@ -23,7 +27,8 @@ print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),
 # --- Blocked rules table ---
 my @events = &parse_blocks();
 if (!@events) {
-	print &text('index_none', "<tt>$config{'error_log'}</tt>"),"<p>\n";
+	my $n = scalar(&log_files());
+	print &text('index_none', $n),"<p>\n";
 	&ui_print_footer("/", $text{'index'});
 	exit;
 	}
@@ -62,11 +67,12 @@ foreach my $g (@groups) {
 	my $allow = &ui_link("allow.cgi?id=".&urlize($g->{'id'}).
 			     "&domain=".&urlize($g->{'hostname'}),
 			     $text{'index_allow'});
-	my $badge = $g->{'action'} eq 'warning' ?
-		$text{'index_warn'} : "<font color=#cc0000>$text{'index_block'}</font>";
+	my $badge = $g->{'action'} eq 'blocked' ?
+		"<font color=#cc0000>$text{'index_block'}</font>" : $text{'index_warn'};
 	push(@rows, [
 		"<b>$g->{'id'}</b>",
 		&html_escape($g->{'hostname'} || "-"),
+		$badge,
 		$g->{'count'},
 		&html_escape($g->{'msg'}),
 		"<tt>".&html_escape($g->{'last_uri'})."</tt>",
@@ -75,8 +81,8 @@ foreach my $g (@groups) {
 	}
 
 print &ui_columns_table(
-	[ $text{'index_ruleid'}, $text{'index_domain'}, $text{'index_hits'},
-	  $text{'index_message'}, $text{'index_uri'}, "" ],
+	[ $text{'index_ruleid'}, $text{'index_domain'}, $text{'index_action'},
+	  $text{'index_hits'}, $text{'index_message'}, $text{'index_uri'}, "" ],
 	100, \@rows);
 
 if ($hidden) {

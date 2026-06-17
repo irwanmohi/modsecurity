@@ -168,10 +168,24 @@ ModSecurity logs every event to the Apache **error log** with structured tags:
 [id "942100"] [msg "SQL Injection..."] [hostname "client-a.com"] [uri "/wp-admin/post.php"]
 ```
 
-Even with dozens of Virtualmin domains, they all log to **one** error log. The
-module groups by the `hostname` tag — no per-domain log files needed. (Set
-`SecAuditLogFormat JSON` and `audit_format=json` in the module config for
-cleaner parsing.)
+Virtualmin usually gives **each domain its own error log** (e.g.
+`/home/<user>/logs/error_log`). The module auto-discovers them all by reading
+the `ErrorLog` directive from every vhost under `/etc/apache2/sites-enabled`,
+plus the globs in `extra_log_globs` (default `/home/*/logs/error_log` and
+`/var/log/virtualmin/*_error_log`), and the global log. It then aggregates
+events from every log and groups them by the `hostname` tag, so one dashboard
+shows all domains. The status panel shows how many logs were scanned —
+**Logs scanned → view** lists the exact files (handy if a domain is missing).
+
+If your paths differ, set `log_files` (an explicit list), `apache_sites`, or
+`extra_log_globs` under Module Config. (Set `SecAuditLogFormat JSON` and
+`audit_format=json` for cleaner parsing if you use the audit log instead.)
+
+> **Tip on which rules to allow:** rules `949110` (anomaly threshold) and
+> `980130` (correlation) are *aggregate* rules — they fire because some other
+> rule scored points. Don't allow these; allow the specific rule that actually
+> matched (e.g. `942100` SQLi, `941180` XSS). The Action column shows which
+> rules truly **BLOCKED** vs only **warning**.
 
 ### How "allow" works
 
