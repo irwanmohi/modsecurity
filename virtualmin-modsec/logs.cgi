@@ -19,4 +19,4 @@ foreach my $f (@logs) {
 print &ui_columns_table([ $text{'logs_path'}, $text{'logs_size'} ], 100, \@rows);
 
 print "<p><font size=-1>",$text{'logs_hint'},"</font></p>\n";
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

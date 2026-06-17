@@ -16,7 +16,7 @@ if (!$in{'confirm'}) {
 		&text('bk_rusure', &html_escape($name)),
 		[ [ "name", $name ] ],
 		[ [ "confirm", $text{'bk_restore'} ] ]);
-	&ui_print_footer("backups.cgi", $text{'bk_return'});
+	&modsec_footer("backups.cgi", $text{'bk_return'});
 	exit;
 	}
 

@@ -26,7 +26,7 @@ print &ui_form_end();
 my @events = reverse &parse_blocks();   # newest first
 if (!@events) {
 	print "<p>",$text{'tail_none'},"</p>\n";
-	&ui_print_footer("index.cgi", $text{'index_return'});
+	&modsec_footer("index.cgi", $text{'index_return'});
 	exit;
 	}
 @events = @events[0 .. $limit - 1] if (@events > $limit);
@@ -51,4 +51,4 @@ print &ui_columns_table(
 	  $text{'index_message'} ],
 	100, \@rows);
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

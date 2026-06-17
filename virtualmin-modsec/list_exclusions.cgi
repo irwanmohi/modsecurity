@@ -9,7 +9,7 @@ require './modsec-lib.pl';
 my @ex = &list_exclusions();
 if (!@ex) {
 	print "<p>",$text{'exc_none'},"</p>\n";
-	&ui_print_footer("index.cgi", $text{'index_return'});
+	&modsec_footer("index.cgi", $text{'index_return'});
 	exit;
 	}
 
@@ -30,4 +30,4 @@ print &ui_columns_table(
 	[ $text{'index_ruleid'}, $text{'index_domain'}, $text{'exc_target'}, "" ],
 	100, \@rows);
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

@@ -13,6 +13,18 @@ sub can_access
 return $access{$_[0]};
 }
 
+# modsec_footer(@args)
+# Print a small "created by" credit, then the standard Webmin module footer.
+# All module pages call this instead of ui_print_footer directly.
+sub modsec_footer
+{
+print "<hr>\n";
+print "<div style='text-align:center;font-size:11px;opacity:0.6;margin:6px 0'>",
+      "Created by <a href='https://github.com/irwanmohi' target='_blank'>",
+      "github.com/irwanmohi</a></div>\n";
+&ui_print_footer(@_);
+}
+
 # get_engine_state()
 # Returns the current SecRuleEngine value (On / DetectionOnly / Off / undef)
 # by reading the main modsecurity.conf.

@@ -9,7 +9,7 @@ require './modsec-lib.pl';
 my @events = &parse_blocks();
 if (!@events) {
 	print "<p>",$text{'stats_none'},"</p>\n";
-	&ui_print_footer("index.cgi", $text{'index_return'});
+	&modsec_footer("index.cgi", $text{'index_return'});
 	exit;
 	}
 
@@ -74,4 +74,4 @@ else {
 	print "<p>",$text{'stats_noday'},"</p>\n";
 	}
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

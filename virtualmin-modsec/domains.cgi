@@ -46,4 +46,4 @@ print &ui_table_end();
 
 print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

@@ -61,4 +61,4 @@ else {
 		}
 	}
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

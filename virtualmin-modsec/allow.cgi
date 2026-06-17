@@ -26,7 +26,7 @@ if (!$in{'confirm'}) {
 		"<font size=-1>".$text{'allow_target_hint'}."</font>");
 	print &ui_table_end();
 	print &ui_form_end([ [ undef, $text{'allow_ok'} ] ]);
-	&ui_print_footer("index.cgi", $text{'index_return'});
+	&modsec_footer("index.cgi", $text{'index_return'});
 	exit;
 	}
 

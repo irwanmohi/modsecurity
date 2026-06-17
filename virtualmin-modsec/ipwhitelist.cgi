@@ -14,4 +14,4 @@ print &ui_textarea("ips", join("\n", @ips), 8, 50);
 print "<p><font size=-1>",$text{'ip_hint'},"</font></p>\n";
 print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});

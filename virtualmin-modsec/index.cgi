@@ -30,7 +30,7 @@ my @events = &parse_blocks();
 if (!@events) {
 	my $n = scalar(&log_files());
 	print &text('index_none', $n),"<p>\n";
-	&ui_print_footer("/", $text{'index'});
+	&modsec_footer("/", $text{'index'});
 	exit;
 	}
 my @groups = &group_blocks(\@events);
@@ -93,4 +93,4 @@ if ($hidden) {
 # Link to existing exclusions
 print "<p>",&ui_link("list_exclusions.cgi", $text{'index_managed'}),"</p>\n";
 
-&ui_print_footer("/", $text{'index'});
+&modsec_footer("/", $text{'index'});

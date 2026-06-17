@@ -11,7 +11,7 @@ print "<p>",$text{'bk_intro'},"</p>\n";
 
 if (!@b) {
 	print "<p>",$text{'bk_none'},"</p>\n";
-	&ui_print_footer("index.cgi", $text{'index_return'});
+	&modsec_footer("index.cgi", $text{'index_return'});
 	exit;
 	}
 
@@ -34,4 +34,4 @@ print &ui_columns_table(
 	[ $text{'bk_file'}, $text{'bk_when'}, $text{'logs_size'}, "" ],
 	100, \@rows);
 
-&ui_print_footer("index.cgi", $text{'index_return'});
+&modsec_footer("index.cgi", $text{'index_return'});
