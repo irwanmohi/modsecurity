@@ -369,6 +369,72 @@ if (&package_loads_crs()) {
 return &apply_changes();
 }
 
+# list_domain_engine()
+# Return a hash of domain => engine mode (On/Off/DetectionOnly) for every
+# per-domain override currently configured.
+sub list_domain_engine
+{
+my %map;
+my $f = $config{'domain_engine_file'};
+return %map if (!-r $f);
+my $lref = &read_file_lines($f, 1);
+foreach my $l (@$lref) {
+	if ($l =~ /^#\s*virtualmin-modsec-engine:\s*domain=(\S+)\s+mode=(\S+)/) {
+		$map{$1} = $2;
+		}
+	}
+return %map;
+}
+
+# write_domain_engine(\%map)
+# Rewrite the per-domain engine file from a domain => mode hash. Modes of
+# "default" (or empty) are skipped (the domain inherits the global engine).
+# If nothing is left, the file is removed. Returns (1) or (0, error).
+sub write_domain_engine
+{
+my ($map) = @_;
+my $f = $config{'domain_engine_file'};
+my @active = grep { $map->{$_} && $map->{$_} ne 'default' } keys %$map;
+if (!@active) {
+	unlink($f) if (-e $f);
+	return 1;
+	}
+my @lines = (
+	"# Managed by Virtualmin ModSecurity Manager - per-domain engine modes.",
+	"# Do not edit by hand.");
+# Use a separate id range so these never clash with allow exclusions.
+my $gid = ($config{'id_base'} || 9000000) + 100000;
+foreach my $dom (sort @active) {
+	my $mode = $map->{$dom};
+	next if ($mode !~ /^(On|Off|DetectionOnly)$/);
+	push(@lines, "");
+	push(@lines, "# virtualmin-modsec-engine: domain=$dom mode=$mode");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $dom\" \\");
+	push(@lines, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=$mode\"");
+	$gid++;
+	}
+&open_tempfile(my $FH, ">$f", 1) || return (0, "Cannot write $f");
+&print_tempfile($FH, join("\n", @lines)."\n");
+&close_tempfile($FH);
+return 1;
+}
+
+# set_domain_engine($domain, $mode)
+# Set a single domain's engine mode and reload. $mode is default/On/Off/
+# DetectionOnly. Returns (1) or (0, error).
+sub set_domain_engine
+{
+my ($domain, $mode) = @_;
+$domain =~ /^[a-zA-Z0-9\.\-\_]+$/ || return (0, "Invalid domain");
+$mode =~ /^(default|On|Off|DetectionOnly)$/ || return (0, "Invalid mode");
+my %map = &list_domain_engine();
+if ($mode eq 'default') { delete $map{$domain}; }
+else                    { $map{$domain} = $mode; }
+my ($ok, $err) = &write_domain_engine(\%map);
+return ($ok, $err) if (!$ok);
+return &apply_changes();
+}
+
 # get_crs_params()
 # Return (paranoia_level, anomaly_threshold) from our managed block in
 # crs-setup.conf, or sensible defaults if not set.

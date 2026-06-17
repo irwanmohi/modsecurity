@@ -17,7 +17,8 @@ the rule engine and install/tune the OWASP Core Rule Set.
 - **One-click allow** — whitelist a rule for a single domain (scoped by `Host`
   header, so other sites stay protected). Falls back to global if no host.
 - **Undo anything** — list all applied exclusions and remove them.
-- **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off.
+- **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off,
+  globally or **per virtual server** (host-scoped `ctl:ruleEngine`).
 - **OWASP CRS** — install, enable/disable, and set Paranoia Level + inbound
   anomaly threshold from the UI.
 - **Safe by default** — every change runs `apache2ctl configtest` first and
@@ -114,6 +115,15 @@ From the dashboard, open **Engine & Core Rule Set settings** to:
 - **Install** and **enable** the OWASP Core Rule Set.
 - Set the **Paranoia Level** (1 = fewest false positives … 4 = strictest) and
   the **inbound anomaly threshold** (lower = blocks more aggressively).
+
+### Per-domain engine mode
+
+Open **Per-domain engine mode** from the dashboard to set ModSecurity to
+**Default / On / DetectionOnly / Off** for each virtual server independently.
+"Default" means the domain follows the global engine setting. This is done with
+host-scoped `ctl:ruleEngine` rules in
+`/etc/modsecurity/virtualmin-modsec-domains.conf` — no vhost editing, and a
+problem site can be set to DetectionOnly while every other site stays On.
 
 ### Recommended workflow
 
@@ -232,7 +242,8 @@ it manually and reload Apache if you want the rules back to default.
 
 - [x] Dashboard with per-domain grouping
 - [x] One-click allow / remove (host-scoped)
-- [x] SecRuleEngine toggle
+- [x] SecRuleEngine toggle (global)
+- [x] Per-domain engine mode (On / DetectionOnly / Off)
 - [x] CRS install / enable + Paranoia Level + anomaly threshold
 - [ ] `SecRuleUpdateTargetById` (whitelist a single parameter, not the whole rule)
 - [ ] IP whitelist

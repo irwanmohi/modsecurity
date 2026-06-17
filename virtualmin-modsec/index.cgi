@@ -14,7 +14,8 @@ print &ui_table_start($text{'index_status'}, "width=100%", 2);
 print &ui_table_row($text{'index_engine'}, "<b>$statetext</b>");
 print &ui_table_row($text{'index_conf'}, "<tt>$config{'modsec_conf'}</tt>");
 print &ui_table_end();
-print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),"</p>\n";
+print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),
+      " &nbsp;|&nbsp; ",&ui_link("domains.cgi", $text{'index_perdomain'}),"</p>\n";
 
 # --- Blocked rules table ---
 my @events = &parse_blocks();

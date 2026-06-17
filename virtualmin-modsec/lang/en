@@ -19,6 +19,16 @@ index_warn=warning
 index_return=Return to dashboard
 index_managed=View applied exclusions
 index_settings=Engine & Core Rule Set settings
+index_perdomain=Per-domain engine mode
+
+dom_title=Per-Domain Engine Mode
+dom_intro=Override the ModSecurity engine mode for individual virtual servers. "Default" means the domain follows the global engine setting.
+dom_mode=Engine mode
+dom_default=Default (follow global)
+dom_manual=Add / set a domain manually
+dom_nodoms=No Virtualmin domains found. Use the manual entry below.
+dom_err=Failed to apply per-domain settings
+dom_badname=Invalid domain name
 
 eng_title=Engine & Core Rule Set
 eng_err=Failed to apply settings
