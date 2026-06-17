@@ -20,6 +20,7 @@ index_return=Return to dashboard
 index_managed=View applied exclusions
 index_settings=Engine & Core Rule Set settings
 index_perdomain=Per-domain engine mode
+index_ipwhitelist=Trusted IP whitelist
 
 dom_title=Per-Domain Engine Mode
 dom_intro=Override the ModSecurity engine mode for individual virtual servers. "Default" means the domain follows the global engine setting.
@@ -61,6 +62,9 @@ allow_eacl=You are not allowed to add exclusions
 allow_rusure_dom=Are you sure you want to allow rule $1 for domain $2? This stops that rule from blocking requests to this site only.
 allow_rusure_all=Are you sure you want to allow rule $1 for ALL sites? This disables that rule globally.
 allow_ok=Allow rule
+allow_scope=Scope (optional)
+allow_target=Only this parameter
+allow_target_hint=Leave blank to allow the whole rule. To whitelist just one field, enter a ModSecurity target, e.g. ARGS:content, ARGS:email, or REQUEST_COOKIES:sessionid.
 
 exc_title=Applied Exclusions
 exc_none=No exclusions have been applied yet.
@@ -68,3 +72,10 @@ exc_alldoms=ALL sites (global)
 exc_remove=Remove
 exc_rmerr=Failed to remove exclusion
 exc_badid=Invalid exclusion id
+exc_target=Parameter
+exc_wholerule=(whole rule)
+
+ip_title=Trusted IP Whitelist
+ip_intro=Requests from these IP addresses bypass ModSecurity entirely. Use for your admin/office IP, monitoring services, or payment gateway callbacks that get false-positive blocks.
+ip_hint=One IP or CIDR range per line, e.g. 203.0.113.5 or 198.51.100.0/24. Both IPv4 and IPv6 are accepted. Leave empty to remove the whitelist.
+ip_err=Failed to apply IP whitelist

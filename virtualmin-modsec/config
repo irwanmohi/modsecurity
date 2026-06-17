@@ -3,6 +3,7 @@ audit_log=/var/log/apache2/modsec_audit.log
 audit_format=native
 exclusion_file=/etc/modsecurity/virtualmin-modsec-exclusions.conf
 domain_engine_file=/etc/modsecurity/virtualmin-modsec-domains.conf
+ip_whitelist_file=/etc/modsecurity/virtualmin-modsec-ipwhitelist.conf
 modsec_conf=/etc/modsecurity/modsecurity.conf
 apache_reload=systemctl reload apache2
 apache_test=apache2ctl configtest

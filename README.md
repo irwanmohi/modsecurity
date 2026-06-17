@@ -15,8 +15,13 @@ the rule engine and install/tune the OWASP Core Rule Set.
 - **Dashboard** — every ModSecurity event grouped by Rule ID and domain, with
   hit counts, the rule message, and the last URI that triggered it.
 - **One-click allow** — whitelist a rule for a single domain (scoped by `Host`
-  header, so other sites stay protected). Falls back to global if no host.
+  header, so other sites stay protected) or globally. Optionally whitelist just
+  one parameter of a rule instead of the whole rule (`ctl:ruleRemoveTargetById`).
+- **Trusted IP whitelist** — let your admin/office IPs, monitoring, or payment
+  callbacks bypass ModSecurity entirely (`@ipMatch`).
 - **Undo anything** — list all applied exclusions and remove them.
+- **Safe writes** — every config change is tested with `apache2ctl configtest`
+  and automatically rolled back if it would break Apache.
 - **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off,
   globally or **per virtual server** (host-scoped `ctl:ruleEngine`).
 - **OWASP CRS** — install, enable/disable, and set Paranoia Level + inbound
@@ -101,6 +106,18 @@ Click **Allow** next to a rule, confirm, and the module writes a host-scoped
 exclusion so **that rule stops blocking that domain only**. Other rules and
 other domains are unaffected. Apache is config-tested and reloaded
 automatically.
+
+On the confirm screen you can optionally enter a **parameter** (e.g.
+`ARGS:content`, `ARGS:email`, `REQUEST_COOKIES:sessionid`) to whitelist only
+that field instead of disabling the whole rule — safer, since the rule still
+protects every other parameter.
+
+### Trusted IP whitelist
+
+Open **Trusted IP whitelist** from the dashboard and enter one IP or CIDR per
+line (IPv4 or IPv6). Requests from those addresses bypass ModSecurity entirely
+— ideal for your admin IP, monitoring probes, or payment-gateway callbacks that
+keep tripping the rules.
 
 ### 3. Review / remove exclusions
 
@@ -245,8 +262,9 @@ it manually and reload Apache if you want the rules back to default.
 - [x] SecRuleEngine toggle (global)
 - [x] Per-domain engine mode (On / DetectionOnly / Off)
 - [x] CRS install / enable + Paranoia Level + anomaly threshold
-- [ ] `SecRuleUpdateTargetById` (whitelist a single parameter, not the whole rule)
-- [ ] IP whitelist
+- [x] Per-parameter whitelist (`ctl:ruleRemoveTargetById`)
+- [x] Trusted IP whitelist (`@ipMatch`)
+- [x] Auto-rollback on bad config
 - [ ] Live log tail + attack statistics chart
 - [ ] Config backup before each change
 

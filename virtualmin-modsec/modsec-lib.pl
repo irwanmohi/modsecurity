@@ -145,13 +145,21 @@ my $f = $config{'exclusion_file'};
 my @out;
 return @out if (!-r $f);
 my $lref = &read_file_lines($f, 1);
-for(my $i=0; $i<@$lref; $i++) {
-	# Marker comment we write above each generated rule.
-	if ($lref->[$i] =~ /^#\s*virtualmin-modsec:\s*domain=(\S*)\s+ruleid=(\S+)/) {
-		my ($dom, $rid) = ($1, $2);
-		my ($gid) = $lref->[$i+1] =~ /id:(\d+)/;
-		push(@out, { domain => $dom, ruleid => $rid, genid => $gid, line => $i });
+my $i = 0;
+while ($i < @$lref) {
+	if ($lref->[$i] =~ /^#\s*virtualmin-modsec:\s*domain=(\S*)\s+ruleid=(\S+?)(?:\s+target=(\S+))?\s*$/) {
+		my ($dom, $rid, $tgt) = ($1, $2, $3);
+		# Scan the block's rule lines for the generated id.
+		my ($gid, $j) = (undef, $i + 1);
+		while ($j < @$lref && $lref->[$j] ne "" &&
+		       $lref->[$j] !~ /^#\s*virtualmin-modsec:/) {
+			if ($lref->[$j] =~ /id:(\d+)/) { $gid = $1; last; }
+			$j++;
+			}
+		push(@out, { domain => $dom, ruleid => $rid,
+			     target => $tgt, genid => $gid });
 		}
+	$i++;
 	}
 return @out;
 }
@@ -169,59 +177,81 @@ foreach my $e (@ex) {
 return $max + 1;
 }
 
-# add_exclusion($ruleid, $domain)
-# Append a Host-scoped ctl:ruleRemoveById exclusion to the managed file.
-# If $domain is empty, the exclusion applies globally (all sites).
+# add_exclusion($ruleid, $domain, $target)
+# Whitelist a rule using a runtime ctl action (order-independent, survives CRS
+# updates). With $target set (e.g. "ARGS:content") only that parameter is
+# removed from the rule; otherwise the whole rule is removed. With $domain set
+# it is scoped to that site by Host header; otherwise it applies globally.
 # Returns (1) on success or (0, error) on failure.
 sub add_exclusion
 {
-my ($ruleid, $domain) = @_;
+my ($ruleid, $domain, $target) = @_;
+$domain = "" if (!defined $domain);
+$target = "" if (!defined $target);
 $ruleid =~ /^\d+$/ || return (0, "Invalid rule id");
 $domain =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain");
+$target ne "" && $target !~ /^[A-Za-z0-9_:\-\.\[\]]+$/ &&
+	return (0, "Invalid target");
 my $f = $config{'exclusion_file'};
-my $lref = -r $f ? &read_file_lines($f) : [];
-if (!@$lref) {
-	push(@$lref, "# Managed by Virtualmin ModSecurity Manager. Do not edit by hand.");
+my $old = -r $f ? &read_file_contents($f) : undef;
+my @lines = -r $f ? @{&read_file_lines($f, 1)} : ();
+if (!@lines) {
+	push(@lines, "# Managed by Virtualmin ModSecurity Manager. Do not edit by hand.");
 	}
 my $gid = &next_gen_id();
-push(@$lref, "");
-push(@$lref, "# virtualmin-modsec: domain=$domain ruleid=$ruleid");
+my $ctl = $target ne "" ? "ctl:ruleRemoveTargetById=$ruleid;$target"
+			: "ctl:ruleRemoveById=$ruleid";
+push(@lines, "");
+push(@lines, "# virtualmin-modsec: domain=$domain ruleid=$ruleid".
+	     ($target ne "" ? " target=$target" : ""));
 if ($domain) {
-	push(@$lref, "SecRule REQUEST_HEADERS:Host \"\@streq $domain\" \\");
-	push(@$lref, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleRemoveById=$ruleid\"");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $domain\" \\");
+	push(@lines, "    \"id:$gid,phase:1,pass,nolog,$ctl\"");
 	}
 else {
-	push(@$lref, "SecRuleRemoveById $ruleid");
+	push(@lines, "SecAction \\");
+	push(@lines, "    \"id:$gid,phase:1,pass,nolog,$ctl\"");
 	}
-&flush_file_lines($f);
-return &apply_changes();
+return &write_test_rollback($f, \@lines, $old);
 }
 
 # remove_exclusion($genid)
-# Delete the exclusion block (marker + rule lines) identified by its generated
-# id, then reload Apache. Returns (1) or (0, error).
+# Delete the exclusion block whose generated rule id is $genid, then reload.
+# Parses block by block (marker .. blank/next marker) so it works for both the
+# two-line SecRule/SecAction forms. Returns (1) or (0, error).
 sub remove_exclusion
 {
 my ($genid) = @_;
 my $f = $config{'exclusion_file'};
 return (0, "No exclusion file") if (!-r $f);
-my $lref = &read_file_lines($f);
-my @keep;
-my $skip = 0;
-foreach my $l (@$lref) {
-	if ($l =~ /^#\s*virtualmin-modsec:/) {
-		$skip = 0;   # reset; decide on the rule line
-		}
-	if ($l =~ /id:$genid\b/) {
-		# Drop this rule line and its preceding marker/blank.
-		pop(@keep) while (@keep && $keep[$#keep] =~ /^(#\s*virtualmin-modsec:|\s*$|.*\\\s*$)/ && $keep[$#keep] !~ /SecRule/);
+my $old = &read_file_contents($f);
+my $lref = &read_file_lines($f, 1);
+my @out;
+my $i = 0;
+while ($i < @$lref) {
+	if ($lref->[$i] =~ /^#\s*virtualmin-modsec:/) {
+		my @block = ($lref->[$i]);
+		my $j = $i + 1;
+		while ($j < @$lref && $lref->[$j] ne "" &&
+		       $lref->[$j] !~ /^#\s*virtualmin-modsec:/) {
+			push(@block, $lref->[$j]);
+			$j++;
+			}
+		my ($bid) = join("\n", @block) =~ /id:(\d+)/;
+		if (defined $bid && $bid == $genid) {
+			# Drop this block plus one preceding blank line.
+			pop(@out) if (@out && $out[$#out] =~ /^\s*$/);
+			$i = $j;
+			next;
+			}
+		push(@out, @block);
+		$i = $j;
 		next;
 		}
-	push(@keep, $l);
+	push(@out, $lref->[$i]);
+	$i++;
 	}
-@$lref = @keep;
-&flush_file_lines($f);
-return &apply_changes();
+return &write_test_rollback($f, \@out, $old);
 }
 
 # apply_changes()
@@ -237,6 +267,84 @@ if ($? != 0) {
 	return (0, "Apache reload failed:\n$out");
 	}
 return (1);
+}
+
+# write_test_rollback($file, \@newlines, $oldcontent)
+# Write @newlines to $file and apply. If Apache's config test fails, restore
+# the previous content (or delete the file if it was new) so a bad edit can
+# never leave Apache unable to start. Returns (1) or (0, error).
+sub write_test_rollback
+{
+my ($file, $newlines, $old) = @_;
+&open_tempfile(my $FH, ">$file", 1) || return (0, "Cannot write $file");
+&print_tempfile($FH, join("\n", @$newlines)."\n");
+&close_tempfile($FH);
+my ($ok, $err) = &apply_changes();
+return (1) if ($ok);
+if (defined $old) {
+	&open_tempfile(my $F2, ">$file", 1);
+	&print_tempfile($F2, $old);
+	&close_tempfile($F2);
+	}
+else {
+	unlink($file) if (-e $file);
+	}
+return (0, $err);
+}
+
+# get_ip_whitelist()
+# Return the list of trusted IPs/CIDRs that bypass ModSecurity.
+sub get_ip_whitelist
+{
+my @ips;
+my $f = $config{'ip_whitelist_file'};
+return @ips if (!-r $f);
+my $lref = &read_file_lines($f, 1);
+foreach my $l (@$lref) {
+	if ($l =~ /^#\s*virtualmin-modsec-ipwhitelist:\s*(.*\S)/) {
+		@ips = split(/\s*,\s*/, $1);
+		}
+	}
+return @ips;
+}
+
+# valid_ip_entry($ip)
+# Loosely validate an IPv4/IPv6 address with optional CIDR suffix.
+sub valid_ip_entry
+{
+my ($ip) = @_;
+return 1 if ($ip =~ /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/);       # IPv4
+return 1 if ($ip =~ /:/ && $ip =~ /^[0-9a-fA-F:]+(\/\d{1,3})?$/); # IPv6
+return 0;
+}
+
+# set_ip_whitelist(\@ips)
+# Replace the trusted-IP whitelist with @ips (one ipMatch rule that turns the
+# engine off for those addresses), then reload with rollback on failure.
+sub set_ip_whitelist
+{
+my ($ips) = @_;
+my @clean;
+foreach my $ip (@$ips) {
+	$ip =~ s/^\s+|\s+$//g;
+	next if ($ip eq "");
+	&valid_ip_entry($ip) || return (0, "Invalid IP/CIDR: $ip");
+	push(@clean, $ip);
+	}
+my $f = $config{'ip_whitelist_file'};
+my $old = -r $f ? &read_file_contents($f) : undef;
+if (!@clean) {
+	unlink($f) if (-e $f);
+	return &apply_changes();
+	}
+my $gid = ($config{'id_base'} || 9000000) + 200000;
+my $list = join(",", @clean);
+my @lines = (
+	"# Managed by Virtualmin ModSecurity Manager - trusted IP whitelist.",
+	"# virtualmin-modsec-ipwhitelist: $list",
+	"SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
+	"    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=Off\"");
+return &write_test_rollback($f, \@lines, $old);
 }
 
 # set_engine_state($value)

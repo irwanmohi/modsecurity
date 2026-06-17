@@ -21,11 +21,13 @@ foreach my $e (@ex) {
 	push(@rows, [
 		"<b>$e->{'ruleid'}</b>",
 		&html_escape($e->{'domain'} || $text{'exc_alldoms'}),
+		$e->{'target'} ? "<tt>".&html_escape($e->{'target'})."</tt>"
+			       : $text{'exc_wholerule'},
 		$rm,
 		]);
 	}
 print &ui_columns_table(
-	[ $text{'index_ruleid'}, $text{'index_domain'}, "" ],
+	[ $text{'index_ruleid'}, $text{'index_domain'}, $text{'exc_target'}, "" ],
 	100, \@rows);
 
 &ui_print_footer("index.cgi", $text{'index_return'});
