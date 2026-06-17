@@ -19,7 +19,11 @@ the rule engine and install/tune the OWASP Core Rule Set.
   one parameter of a rule instead of the whole rule (`ctl:ruleRemoveTargetById`).
 - **Trusted IP whitelist** — let your admin/office IPs, monitoring, or payment
   callbacks bypass ModSecurity entirely (`@ipMatch`).
-- **Undo anything** — list all applied exclusions and remove them.
+- **Undo anything** — list all applied exclusions and remove them. Allowed
+  rules are hidden from the dashboard so the list only shows what still needs
+  attention.
+- **Live log + statistics** — auto-refreshing tail of recent events, plus
+  top-rules / top-domains breakdowns.
 - **Safe writes** — every config change is tested with `apache2ctl configtest`
   and automatically rolled back if it would break Apache.
 - **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off,
@@ -265,7 +269,9 @@ it manually and reload Apache if you want the rules back to default.
 - [x] Per-parameter whitelist (`ctl:ruleRemoveTargetById`)
 - [x] Trusted IP whitelist (`@ipMatch`)
 - [x] Auto-rollback on bad config
-- [ ] Live log tail + attack statistics chart
+- [x] Live log tail (auto-refresh) + statistics (top rules/domains)
+- [x] Hide already-allowed rules from the dashboard
+- [ ] Per-day attack timeline chart
 - [ ] Config backup before each change
 
 ---

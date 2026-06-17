@@ -16,11 +16,30 @@ index_uri=Last URI
 index_allow=Allow
 index_block=BLOCKED
 index_warn=warning
-index_return=Return to dashboard
+index_return=dashboard
 index_managed=View applied exclusions
 index_settings=Engine & Core Rule Set settings
 index_perdomain=Per-domain engine mode
 index_ipwhitelist=Trusted IP whitelist
+index_livelog=Live log
+index_stats=Statistics
+index_hidden=$1 already-allowed rule(s) hidden from this list. See applied exclusions to review or undo them.
+
+tail_title=Live ModSecurity Log
+tail_none=No ModSecurity events in the log yet.
+tail_every=Auto-refresh every
+tail_off=Off
+tail_apply=Apply
+tail_time=Time
+tail_client=Client IP
+
+stats_title=ModSecurity Statistics
+stats_none=No ModSecurity events to summarise yet.
+stats_total=Totals
+stats_events=Total events
+stats_count=Hits
+stats_toprules=Top rules by hits
+stats_topdomains=Top domains by hits
 
 dom_title=Per-Domain Engine Mode
 dom_intro=Override the ModSecurity engine mode for individual virtual servers. "Default" means the domain follows the global engine setting.

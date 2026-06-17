@@ -16,7 +16,9 @@ print &ui_table_row($text{'index_conf'}, "<tt>$config{'modsec_conf'}</tt>");
 print &ui_table_end();
 print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),
       " &nbsp;|&nbsp; ",&ui_link("domains.cgi", $text{'index_perdomain'}),
-      " &nbsp;|&nbsp; ",&ui_link("ipwhitelist.cgi", $text{'index_ipwhitelist'}),"</p>\n";
+      " &nbsp;|&nbsp; ",&ui_link("ipwhitelist.cgi", $text{'index_ipwhitelist'}),
+      " &nbsp;|&nbsp; ",&ui_link("tail.cgi", $text{'index_livelog'}),
+      " &nbsp;|&nbsp; ",&ui_link("stats.cgi", $text{'index_stats'}),"</p>\n";
 
 # --- Blocked rules table ---
 my @events = &parse_blocks();
@@ -40,9 +42,23 @@ print &ui_select("domain", $filter,
 print " ",&ui_submit($text{'index_filter'});
 print &ui_form_end();
 
+# Hide groups already fully allowed (whole-rule exclusions, global or matching
+# this domain). Per-parameter exclusions don't count as fully allowed.
+my %allowed;
+foreach my $e (&list_exclusions()) {
+	next if ($e->{'target'});
+	$allowed{$e->{'ruleid'}."\0".($e->{'domain'} || "")} = 1;
+	}
+my $hidden = 0;
+
 my @rows;
 foreach my $g (@groups) {
 	next if ($filter ne "" && $g->{'hostname'} ne $filter);
+	if ($allowed{$g->{'id'}."\0"} ||
+	    $allowed{$g->{'id'}."\0".($g->{'hostname'} || "")}) {
+		$hidden++;
+		next;
+		}
 	my $allow = &ui_link("allow.cgi?id=".&urlize($g->{'id'}).
 			     "&domain=".&urlize($g->{'hostname'}),
 			     $text{'index_allow'});
@@ -62,6 +78,10 @@ print &ui_columns_table(
 	[ $text{'index_ruleid'}, $text{'index_domain'}, $text{'index_hits'},
 	  $text{'index_message'}, $text{'index_uri'}, "" ],
 	100, \@rows);
+
+if ($hidden) {
+	print "<p><i>",&text('index_hidden', $hidden),"</i></p>\n";
+	}
 
 # Link to existing exclusions
 print "<p>",&ui_link("list_exclusions.cgi", $text{'index_managed'}),"</p>\n";
