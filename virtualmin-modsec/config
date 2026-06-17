@@ -1,0 +1,15 @@
+error_log=/var/log/apache2/error.log
+audit_log=/var/log/apache2/modsec_audit.log
+audit_format=native
+exclusion_file=/etc/modsecurity/virtualmin-modsec-exclusions.conf
+modsec_conf=/etc/modsecurity/modsecurity.conf
+apache_reload=systemctl reload apache2
+apache_test=apache2ctl configtest
+id_base=9000000
+max_lines=20000
+crs_dir=/usr/share/modsecurity-crs
+crs_load=/usr/share/modsecurity-crs/owasp-crs.load
+crs_setup=/etc/modsecurity/crs/crs-setup.conf
+crs_enable_file=/etc/modsecurity/zz-virtualmin-crs.conf
+crs_pkg=modsecurity-crs
+pkg_install=apt-get install -y

@@ -1,0 +1,6 @@
+desc=ModSecurity Manager
+version=0.1
+category=security
+depends=
+os_support=*-linux
+longdesc=Manage ModSecurity for Virtualmin: view blocked requests, tune false positives, and allow rule IDs per virtual server.

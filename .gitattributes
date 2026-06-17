@@ -1,0 +1,9 @@
+# Webmin module files must keep Unix (LF) line endings on every platform.
+*.cgi   text eol=lf
+*.pl    text eol=lf
+config  text eol=lf
+config.info text eol=lf
+defaultacl  text eol=lf
+module.info text eol=lf
+lang/*  text eol=lf
+*.sh    text eol=lf

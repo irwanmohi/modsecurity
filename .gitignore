@@ -1,0 +1,13 @@
+# Built package — distribute via GitHub Releases, not in the source tree
+*.wbm.gz
+
+# Editor / OS cruft
+*.swp
+*~
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Perl
+*.bak

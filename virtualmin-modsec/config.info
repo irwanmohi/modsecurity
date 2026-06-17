@@ -1,0 +1,9 @@
+error_log=1,Apache error log path,0
+audit_log=2,ModSecurity audit log path,0
+audit_format=3,Audit log format,1,native:Native (serial),json:JSON
+exclusion_file=4,Exclusion rules file (auto-loaded by ModSecurity),0
+modsec_conf=5,Main modsecurity.conf path,0
+apache_test=6,Command to test Apache config,0
+apache_reload=7,Command to reload Apache,0
+id_base=8,Starting ID for generated exclusion rules,0
+max_lines=9,Max log lines to scan,0
