@@ -25,6 +25,9 @@ elsif ($sec eq "disable_crs") {
 elsif ($sec eq "tune") {
 	($ok, $err) = &set_crs_params($in{'pl'}, $in{'an'});
 	}
+elsif ($sec eq "update_crs") {
+	($ok, $err) = &update_crs_apt();
+	}
 else {
 	&error($text{'eng_badsec'});
 	}

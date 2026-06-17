@@ -27,4 +27,4 @@ my ($ok, $err) = &write_domain_engine(\%map);
 $ok || &error($err);
 ($ok, $err) = &apply_changes();
 $ok || &error($err);
-&redirect("domains.cgi");
+&redirect("index.cgi");

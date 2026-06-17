@@ -14,6 +14,7 @@ id_base=9000000
 max_lines=20000
 backup_dir=/etc/modsecurity/virtualmin-modsec-backups
 backup_keep=30
+backup_interval=3600
 crs_dir=/usr/share/modsecurity-crs
 crs_load=/usr/share/modsecurity-crs/owasp-crs.load
 crs_setup=/etc/modsecurity/crs/crs-setup.conf

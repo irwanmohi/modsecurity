@@ -24,8 +24,11 @@ the rule engine and install/tune the OWASP Core Rule Set.
   attention.
 - **Live log + statistics** — auto-refreshing tail of recent events, plus
   top-rules / top-domains breakdowns and a per-day events timeline.
-- **Config backups** — every change is backed up first; the Backups page lets
-  you restore any previous version (with the same test-and-reload safety).
+- **Config backups** — changes are backed up (throttled to one per hour by
+  default, with rotation); the Backups page restores any previous version with
+  the same test-and-reload safety.
+- **CRS version check & update** — see the installed CRS version, check the
+  latest from OWASP (GitHub), and upgrade the package via apt from the UI.
 - **Safe writes** — every config change is tested with `apache2ctl configtest`
   and automatically rolled back if it would break Apache.
 - **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off,
@@ -138,6 +141,10 @@ From the dashboard, open **Engine & Core Rule Set settings** to:
 - **Install** and **enable** the OWASP Core Rule Set.
 - Set the **Paranoia Level** (1 = fewest false positives … 4 = strictest) and
   the **inbound anomaly threshold** (lower = blocks more aggressively).
+- See the **installed CRS version**, **Check latest from OWASP** (GitHub), and
+  **Update CRS via apt**. The apt update installs the newest packaged version;
+  major upstream jumps (3.x → 4.x) aren't auto-applied since they can break
+  sites and need a manual migration.
 
 ### Per-domain engine mode
 

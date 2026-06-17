@@ -11,4 +11,4 @@ require './modsec-lib.pl';
 my @ips = split(/[\s,]+/, $in{'ips'});
 my ($ok, $err) = &set_ip_whitelist(\@ips);
 $ok || &error($err);
-&redirect("ipwhitelist.cgi");
+&redirect("index.cgi");

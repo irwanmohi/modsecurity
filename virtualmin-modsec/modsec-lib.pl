@@ -382,6 +382,17 @@ return if (!$file || !-r $file);
 my $dir = $config{'backup_dir'} || "/etc/modsecurity/virtualmin-modsec-backups";
 &make_dir($dir, 0700) if (!-d $dir);
 my ($base) = $file =~ m{([^/]+)$};
+# Throttle: keep at most one backup per backup_interval seconds (default
+# hourly) so frequent edits don't pile up. Rotation is handled below.
+my $interval = $config{'backup_interval'};
+$interval = 3600 if (!defined $interval || $interval eq '');
+if ($interval > 0) {
+	my @prev = sort glob("$dir/$base.*");
+	if (@prev) {
+		my $mtime = (stat($prev[-1]))[9];
+		return if ($mtime && (time() - $mtime) < $interval);
+		}
+	}
 my @t = localtime();
 my $ts = sprintf("%04d%02d%02d-%02d%02d%02d",
 		 $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
@@ -695,6 +706,73 @@ if ($mode eq 'default') { delete $map{$domain}; }
 else                    { $map{$domain} = $mode; }
 my ($ok, $err) = &write_domain_engine(\%map);
 return ($ok, $err) if (!$ok);
+return &apply_changes();
+}
+
+# crs_version_installed()
+# Best-effort detection of the installed CRS version (e.g. "3.3.2").
+sub crs_version_installed
+{
+my $v;
+foreach my $f ($config{'crs_setup'},
+	       "$config{'crs_dir'}/rules/REQUEST-901-INITIALIZATION.conf") {
+	next if (!$f || !-r $f);
+	foreach my $l (@{&read_file_lines($f, 1)}) {
+		if ($l =~ m{OWASP_CRS/(\d+\.\d+\.\d+)}) { $v = $1; last; }
+		}
+	last if ($v);
+	}
+if (!$v) {
+	my $o = &backquote_command(
+		"dpkg-query -W -f='\${Version}' $config{'crs_pkg'} 2>/dev/null");
+	($v) = $o =~ /(\d+\.\d+\.\d+)/;
+	}
+return $v;
+}
+
+# crs_version_latest()
+# Fetch the latest CRS release tag from GitHub (returns e.g. "4.10.0"), or
+# undef if it can't be reached. Network call is bounded by a short timeout.
+sub crs_version_latest
+{
+my $url = "https://api.github.com/repos/coreruleset/coreruleset/releases/latest";
+my $o = &backquote_command("curl -fsS --max-time 8 ".quotemeta($url)." 2>/dev/null");
+$o = &backquote_command("wget -qO- --timeout=8 ".quotemeta($url)." 2>/dev/null")
+	if ($o !~ /tag_name/);
+my ($v) = $o =~ /"tag_name"\s*:\s*"v?([0-9][0-9.]*)"/;
+return $v;
+}
+
+# version_newer($a, $b)
+# True if version string $a is strictly newer than $b.
+sub version_newer
+{
+my ($a, $b) = @_;
+return 0 if (!$a || !$b);
+my @a = split(/\./, $a);
+my @b = split(/\./, $b);
+for (my $i = 0; $i < 3; $i++) {
+	my $x = $a[$i] || 0;
+	my $y = $b[$i] || 0;
+	return 1 if ($x > $y);
+	return 0 if ($x < $y);
+	}
+return 0;
+}
+
+# update_crs_apt()
+# Refresh the package list and upgrade the CRS package only, then make sure
+# crs-setup.conf exists and reload. Returns (1) or (0, error).
+sub update_crs_apt
+{
+&backquote_logged("apt-get update -y 2>&1");
+my $o = &backquote_logged(
+	"DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y ".
+	"$config{'crs_pkg'} 2>&1");
+if ($? != 0) {
+	return (0, "CRS package upgrade failed:\n$o");
+	}
+&ensure_crs_setup();
 return &apply_changes();
 }
 

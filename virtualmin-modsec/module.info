@@ -1,5 +1,5 @@
 desc=ModSecurity Manager
-version=0.9
+version=0.10
 category=security
 depends=
 os_support=*-linux

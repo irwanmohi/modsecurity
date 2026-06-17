@@ -11,4 +11,5 @@ apache_reload=7,Command to reload Apache,0
 id_base=8,Starting ID for generated exclusion rules,0
 max_lines=9,Max log lines to scan,0
 backup_dir=13,Directory to keep config backups,0
-backup_keep=14,Number of backups to keep per file,0
+backup_keep=14,Number of backups to keep per file (rotation),0
+backup_interval=15,Min seconds between backups of a file (3600=hourly 86400=daily),0

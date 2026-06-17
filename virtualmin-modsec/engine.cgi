@@ -33,10 +33,37 @@ if (!&crs_installed()) {
 	}
 else {
 	my $en = &crs_enabled();
+	my $iv = &crs_version_installed();
+	my $lv = $in{'check'} ? &crs_version_latest() : undef;
 	print &ui_table_row($text{'eng_crs_state'},
 		$en ? $text{'eng_crs_on'} :
 		      "<font color=#cc8800>$text{'eng_crs_off'}</font>");
+	print &ui_table_row($text{'eng_crs_ver'}, ($iv || "?"));
+	if ($in{'check'}) {
+		my $cell;
+		if (!$lv) {
+			$cell = "<i>$text{'eng_crs_unknown'}</i>";
+			}
+		elsif (&version_newer($lv, $iv)) {
+			$cell = "<b>$lv</b> &nbsp; ".
+				"<font color=#cc8800>$text{'eng_crs_avail'}</font>";
+			}
+		else {
+			$cell = "$lv &nbsp; ".
+				"<font color=#3a7d5d>$text{'eng_crs_uptodate'}</font>";
+			}
+		print &ui_table_row($text{'eng_crs_latest'}, $cell);
+		}
 	print &ui_table_end();
+
+	# Version actions: check latest from OWASP (info), and update via apt.
+	print &ui_form_start("engine.cgi", "get");
+	print &ui_hidden("check", 1);
+	print &ui_form_end([ [ undef, $text{'eng_crs_check'} ] ]);
+	print &ui_form_start("save_engine.cgi", "post");
+	print &ui_hidden("section", "update_crs");
+	print &ui_form_end([ [ undef, $text{'eng_crs_update'} ] ]);
+	print "<p><font size=-1>",$text{'eng_crs_aptnote'},"</font></p>\n";
 
 	# Enable/disable toggle
 	print &ui_form_start("save_engine.cgi", "post");
