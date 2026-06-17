@@ -88,11 +88,17 @@ else {
 		push(@files, glob($g));
 		}
 	}
-# Dedupe and keep only readable files.
+# Dedupe by physical file (device + inode) so symlinked duplicates are only
+# scanned once. Virtualmin points /home/<user>/logs/error_log at the same file
+# as /var/log/virtualmin/<domain>_error_log, so a plain path dedupe would
+# double-count every event.
 my (%seen, @out);
 foreach my $f (@files) {
-	next if (!$f || $seen{$f}++);
-	push(@out, $f) if (-r $f);
+	next if (!$f || !-r $f);
+	my @st = stat($f);
+	my $key = @st ? "$st[0]:$st[1]" : $f;
+	next if ($seen{$key}++);
+	push(@out, $f);
 	}
 return @out;
 }
