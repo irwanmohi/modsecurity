@@ -23,7 +23,9 @@ the rule engine and install/tune the OWASP Core Rule Set.
   rules are hidden from the dashboard so the list only shows what still needs
   attention.
 - **Live log + statistics** — auto-refreshing tail of recent events, plus
-  top-rules / top-domains breakdowns.
+  top-rules / top-domains breakdowns and a per-day events timeline.
+- **Config backups** — every change is backed up first; the Backups page lets
+  you restore any previous version (with the same test-and-reload safety).
 - **Safe writes** — every config change is tested with `apache2ctl configtest`
   and automatically rolled back if it would break Apache.
 - **Engine control** — switch `SecRuleEngine` between On / DetectionOnly / Off,
@@ -285,8 +287,9 @@ it manually and reload Apache if you want the rules back to default.
 - [x] Auto-rollback on bad config
 - [x] Live log tail (auto-refresh) + statistics (top rules/domains)
 - [x] Hide already-allowed rules from the dashboard
-- [ ] Per-day attack timeline chart
-- [ ] Config backup before each change
+- [x] Scan all per-domain Virtualmin error logs
+- [x] Per-day attack timeline chart
+- [x] Config backup + restore before each change
 
 ---
 

@@ -319,6 +319,7 @@ return (1);
 sub write_test_rollback
 {
 my ($file, $newlines, $old) = @_;
+&backup_file($file);
 &open_tempfile(my $FH, ">$file", 1) || return (0, "Cannot write $file");
 &print_tempfile($FH, join("\n", @$newlines)."\n");
 &close_tempfile($FH);
@@ -333,6 +334,101 @@ else {
 	unlink($file) if (-e $file);
 	}
 return (0, $err);
+}
+
+# event_date($timestring)
+# Normalise a log timestamp to YYYY-MM-DD, or undef if unparseable.
+sub event_date
+{
+my ($t) = @_;
+return undef if (!$t);
+my %mon = (Jan=>'01',Feb=>'02',Mar=>'03',Apr=>'04',May=>'05',Jun=>'06',
+	   Jul=>'07',Aug=>'08',Sep=>'09',Oct=>'10',Nov=>'11',Dec=>'12');
+# Native Apache: "Thu Jun 18 01:08:07.421795 2026"
+if ($t =~ /^\w+\s+(\w{3})\s+(\d+)\s+[\d:.]+\s+(\d{4})/) {
+	return $mon{$1} ? sprintf("%04d-%s-%02d", $3, $mon{$1}, $2) : undef;
+	}
+# ISO: "2026-06-18..."
+return "$1-$2-$3" if ($t =~ /^(\d{4})-(\d{2})-(\d{2})/);
+# CLF style: "18/Jun/2026:..."
+if ($t =~ m{^(\d{1,2})/(\w{3})/(\d{4})}) {
+	return $mon{$2} ? sprintf("%04d-%s-%02d", $3, $mon{$2}, $1) : undef;
+	}
+return undef;
+}
+
+# --- Config backups -------------------------------------------------------
+
+# backup_file($file)
+# Copy $file into the backup directory with a timestamp before it is changed,
+# pruning to the configured retention count. Silently does nothing if the file
+# doesn't exist yet (nothing to back up).
+sub backup_file
+{
+my ($file) = @_;
+return if (!$file || !-r $file);
+my $dir = $config{'backup_dir'} || "/etc/modsecurity/virtualmin-modsec-backups";
+&make_dir($dir, 0700) if (!-d $dir);
+my ($base) = $file =~ m{([^/]+)$};
+my @t = localtime();
+my $ts = sprintf("%04d%02d%02d-%02d%02d%02d",
+		 $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]);
+# Keep the filename unique even for several changes in the same second.
+my $dest = "$dir/$base.$ts";
+my $n = 1;
+while (-e $dest) { $dest = "$dir/$base.$ts.$n"; $n++; }
+&copy_source_dest($file, $dest);
+# Prune old backups of this file.
+my $keep = $config{'backup_keep'} || 30;
+my @b = sort glob("$dir/$base.*");
+while (@b > $keep) { unlink(shift(@b)); }
+}
+
+# list_backups()
+# Return all backups newest-first as hash refs: file, name, base, ts, size.
+sub list_backups
+{
+my $dir = $config{'backup_dir'} || "/etc/modsecurity/virtualmin-modsec-backups";
+my @out;
+return @out if (!-d $dir);
+foreach my $f (reverse sort glob("$dir/*")) {
+	next if (!-f $f);
+	my ($name) = $f =~ m{([^/]+)$};
+	my ($base, $ts) = $name =~ /^(.*)\.(\d{8}-\d{6})(?:\.\d+)?$/;
+	next if (!$ts);
+	push(@out, { file => $f, name => $name, base => $base,
+		     ts => $ts, size => (stat($f))[7] });
+	}
+return @out;
+}
+
+# managed_paths()
+# The live config files this module edits (used to map a backup back to its
+# original location on restore).
+sub managed_paths
+{
+my @keys = qw(modsec_conf crs_setup exclusion_file domain_engine_file
+	      ip_whitelist_file crs_enable_file);
+return grep { $_ } map { $config{$_} } @keys;
+}
+
+# restore_backup($name)
+# Restore the backup named $name (basename only) over its original file, with
+# the usual test-and-rollback safety. Returns (1) or (0, error).
+sub restore_backup
+{
+my ($name) = @_;
+$name =~ m{/} && return (0, "Invalid backup name");
+my ($base) = $name =~ /^(.*)\.\d{8}-\d{6}(?:\.\d+)?$/;
+$base || return (0, "Invalid backup name");
+my $dir = $config{'backup_dir'} || "/etc/modsecurity/virtualmin-modsec-backups";
+my $src = "$dir/$name";
+-r $src || return (0, "Backup not found");
+my ($target) = grep { m{(?:^|/)\Q$base\E$} } &managed_paths();
+$target || return (0, "Unknown original location for $base");
+my $old = -r $target ? &read_file_contents($target) : undef;
+my @lines = split(/\n/, &read_file_contents($src));
+return &write_test_rollback($target, \@lines, $old);
 }
 
 # get_ip_whitelist()
@@ -408,6 +504,7 @@ foreach my $l (@$lref) {
 		}
 	}
 push(@$lref, "SecRuleEngine $val") if (!$found);
+&backup_file($conf);
 &flush_file_lines($conf);
 return &apply_changes();
 }
@@ -492,6 +589,7 @@ sub enable_crs
 	return (0, "Could not create $config{'crs_setup'} (no template found). ".
 		   "CRS not enabled to avoid breaking Apache.");
 my $f = $config{'crs_enable_file'};
+&backup_file($f);
 if (&package_loads_crs()) {
 	# Apache already loads the CRS itself; make sure our include is gone so
 	# rules don't load twice.
@@ -512,6 +610,7 @@ return &apply_changes();
 sub disable_crs
 {
 my $f = $config{'crs_enable_file'};
+&backup_file($f);
 unlink($f) if (-e $f);
 if (&package_loads_crs()) {
 	return (0, "The CRS is loaded by Apache's own security2.conf. ".
@@ -546,6 +645,7 @@ sub write_domain_engine
 my ($map) = @_;
 my $f = $config{'domain_engine_file'};
 my @active = grep { $map->{$_} && $map->{$_} ne 'default' } keys %$map;
+&backup_file($f);
 if (!@active) {
 	unlink($f) if (-e $f);
 	return 1;
@@ -628,6 +728,7 @@ push(@keep, "    setvar:tx.paranoia_level=$pl,\\");
 push(@keep, "    setvar:tx.inbound_anomaly_score_threshold=$an\"");
 push(@keep, "# END virtualmin-modsec");
 @$lref = @keep;
+&backup_file($f);
 &flush_file_lines($f);
 return &apply_changes();
 }

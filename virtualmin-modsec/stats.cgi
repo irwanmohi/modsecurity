@@ -14,11 +14,13 @@ if (!@events) {
 	}
 
 # Aggregate.
-my (%byrule, %bydom, %byaction);
+my (%byrule, %bydom, %byaction, %byday);
 foreach my $e (@events) {
 	$byrule{$e->{'id'}}++;
 	$bydom{$e->{'hostname'} || "-"}++;
 	$byaction{$e->{'action'}}++;
+	my $d = &event_date($e->{'time'});
+	$byday{$d}++ if ($d);
 	}
 
 # bar_table(\%counts, $label_heading, $limit) -> HTML table with proportional bars.
@@ -51,5 +53,25 @@ print &bar_table(\%byrule, $text{'index_ruleid'}, 10);
 
 print "<h3>",$text{'stats_topdomains'},"</h3>\n";
 print &bar_table(\%bydom, $text{'index_domain'}, 10);
+
+# Per-day timeline (last 14 days with events), ordered by date.
+print "<h3>",$text{'stats_timeline'},"</h3>\n";
+my @days = sort keys %byday;
+@days = @days[-14 .. -1] if (@days > 14);
+my $dmax = 0;
+foreach (@days) { $dmax = $byday{$_} if ($byday{$_} > $dmax); }
+if (@days) {
+	my @drows;
+	foreach my $d (@days) {
+		my $w = int(220 * $byday{$d} / ($dmax || 1)) || 1;
+		push(@drows, [ $d, $byday{$d},
+			"<div style='background:#c08040;height:13px;width:${w}px'></div>" ]);
+		}
+	print &ui_columns_table([ $text{'stats_day'}, $text{'stats_count'}, "" ],
+				100, \@drows);
+	}
+else {
+	print "<p>",$text{'stats_noday'},"</p>\n";
+	}
 
 &ui_print_footer("index.cgi", $text{'index_return'});

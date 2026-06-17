@@ -22,7 +22,8 @@ print "<p>",&ui_link("engine.cgi", $text{'index_settings'}),
       " &nbsp;|&nbsp; ",&ui_link("domains.cgi", $text{'index_perdomain'}),
       " &nbsp;|&nbsp; ",&ui_link("ipwhitelist.cgi", $text{'index_ipwhitelist'}),
       " &nbsp;|&nbsp; ",&ui_link("tail.cgi", $text{'index_livelog'}),
-      " &nbsp;|&nbsp; ",&ui_link("stats.cgi", $text{'index_stats'}),"</p>\n";
+      " &nbsp;|&nbsp; ",&ui_link("stats.cgi", $text{'index_stats'}),
+      " &nbsp;|&nbsp; ",&ui_link("backups.cgi", $text{'index_backups'}),"</p>\n";
 
 # --- Blocked rules table ---
 my @events = &parse_blocks();

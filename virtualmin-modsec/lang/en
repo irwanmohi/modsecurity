@@ -32,6 +32,7 @@ index_perdomain=Per-domain engine mode
 index_ipwhitelist=Trusted IP whitelist
 index_livelog=Live log
 index_stats=Statistics
+index_backups=Backups
 index_hidden=$1 already-allowed rule(s) hidden from this list. See applied exclusions to review or undo them.
 
 tail_title=Live ModSecurity Log
@@ -49,6 +50,19 @@ stats_events=Total events
 stats_count=Hits
 stats_toprules=Top rules by hits
 stats_topdomains=Top domains by hits
+stats_timeline=Events per day
+stats_day=Date
+stats_noday=No dated events found.
+
+bk_title=Config Backups
+bk_intro=Every change the module makes to a config file saves a timestamped backup here first, so you can roll back any change.
+bk_none=No backups yet. They are created automatically the first time you change a setting.
+bk_file=Config file
+bk_when=Backed up
+bk_restore=Restore
+bk_return=backups
+bk_rusure=Restore backup $1 over the current file? Apache will be tested and reloaded.
+bk_err=Failed to restore backup
 
 dom_title=Per-Domain Engine Mode
 dom_intro=Override the ModSecurity engine mode for individual virtual servers. "Default" means the domain follows the global engine setting.

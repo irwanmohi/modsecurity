@@ -10,3 +10,5 @@ apache_test=6,Command to test Apache config,0
 apache_reload=7,Command to reload Apache,0
 id_base=8,Starting ID for generated exclusion rules,0
 max_lines=9,Max log lines to scan,0
+backup_dir=13,Directory to keep config backups,0
+backup_keep=14,Number of backups to keep per file,0
