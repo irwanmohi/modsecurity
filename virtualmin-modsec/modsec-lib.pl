@@ -696,8 +696,9 @@ my $f = $config{'crs_setup'};
 return ($pl, $an) if (!-r $f);
 my $lref = &read_file_lines($f, 1);
 foreach my $l (@$lref) {
-	($pl) = $l =~ /setvar:tx\.paranoia_level=(\d+)/ if ($l =~ /virtualmin-modsec/ || $l =~ /paranoia_level/);
-	($an) = $l =~ /setvar:tx\.inbound_anomaly_score_threshold=(\d+)/ if ($l =~ /anomaly_score_threshold/);
+	next if ($l =~ /^\s*#/);   # skip comments and our BEGIN/END markers
+	$pl = $1 if ($l =~ /setvar:tx\.paranoia_level=(\d+)/);
+	$an = $1 if ($l =~ /setvar:tx\.inbound_anomaly_score_threshold=(\d+)/);
 	}
 return ($pl, $an);
 }
