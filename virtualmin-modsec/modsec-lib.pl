@@ -5,6 +5,70 @@ BEGIN { push(@INC, ".."); };
 use WebminCore;
 &init_config();
 %access = &get_module_acl();
+&platform_adjust();
+
+# platform_adjust()
+# Switch the shipped Debian/Ubuntu (apache2) defaults to the RHEL family
+# (AlmaLinux/CentOS, httpd) equivalents when httpd is detected. Only values
+# still at their Debian default are changed, so user overrides are respected.
+# Changes are in-memory for this request only -- the saved config is untouched.
+sub platform_adjust
+{
+return if (&has_command("apache2ctl"));            # Debian/Ubuntu: leave as-is
+return if (!&has_command("apachectl") && !&has_command("httpd"));  # not httpd
+
+my $lr = "/etc/httpd/modsecurity.d/local_rules";   # RHEL custom-rules dir
+my %map = (
+  apache_test        => [ "apache2ctl configtest", "apachectl configtest" ],
+  apache_reload      => [ "systemctl reload apache2", "systemctl reload httpd" ],
+  error_log          => [ "/var/log/apache2/error.log", "/var/log/httpd/error_log" ],
+  apache_sites       => [ "/etc/apache2/sites-enabled", "/etc/httpd/conf.d" ],
+  modsec_conf        => [ "/etc/modsecurity/modsecurity.conf",
+			  "/etc/httpd/conf.d/mod_security.conf" ],
+  exclusion_file     => [ "/etc/modsecurity/virtualmin-modsec-exclusions.conf",
+			  "$lr/virtualmin-modsec-exclusions.conf" ],
+  domain_engine_file => [ "/etc/modsecurity/virtualmin-modsec-domains.conf",
+			  "$lr/virtualmin-modsec-domains.conf" ],
+  ip_whitelist_file  => [ "/etc/modsecurity/virtualmin-modsec-ipwhitelist.conf",
+			  "$lr/virtualmin-modsec-ipwhitelist.conf" ],
+  ip_blocklist_file  => [ "/etc/modsecurity/virtualmin-modsec-ipblock.conf",
+			  "$lr/virtualmin-modsec-ipblock.conf" ],
+  crs_enable_file    => [ "/etc/modsecurity/zz-virtualmin-crs.conf",
+			  "$lr/zz-virtualmin-crs.conf" ],
+  pkg_install        => [ "apt-get install -y", "dnf install -y" ],
+  crs_pkg            => [ "modsecurity-crs", "mod_security_crs" ],
+  );
+foreach my $k (keys %map) {
+	my ($deb, $rh) = @{$map{$k}};
+	$config{$k} = $rh if ($config{$k} eq $deb);
+	}
+$config{'pkg_install'} = "yum install -y"
+	if ($config{'pkg_install'} eq "dnf install -y" &&
+	    !&has_command("dnf") && &has_command("yum"));
+# Best-effort CRS locations (vary by RPM); only touch Debian defaults.
+if ($config{'crs_dir'} eq "/usr/share/modsecurity-crs") {
+	foreach my $d ("/usr/share/mod_modsecurity_crs", "/usr/lib/modsecurity.d",
+		       "/etc/httpd/modsecurity.d") {
+		if (-d $d) { $config{'crs_dir'} = $d; last; }
+		}
+	}
+if ($config{'crs_setup'} eq "/etc/modsecurity/crs/crs-setup.conf") {
+	foreach my $f ("/etc/httpd/modsecurity.d/crs-setup.conf",
+		       "$config{'crs_dir'}/crs-setup.conf") {
+		if (-r $f) { $config{'crs_setup'} = $f; last; }
+		}
+	}
+}
+
+# ensure_parent_dir($file)
+# Create the directory that will hold $file if it doesn't exist (needed on RHEL
+# where /etc/httpd/modsecurity.d/local_rules may be absent until we write).
+sub ensure_parent_dir
+{
+my ($file) = @_;
+my ($dir) = $file =~ m{^(.*)/[^/]+$};
+&make_dir($dir, 0755) if ($dir && !-d $dir);
+}
 
 # can_access($action)
 # Return true if the current user's ACL grants the named action.
@@ -337,6 +401,7 @@ return (1);
 sub write_test_rollback
 {
 my ($file, $newlines, $old) = @_;
+&ensure_parent_dir($file);
 &backup_file($file);
 &open_tempfile(my $FH, ">$file", 1) || return (0, "Cannot write $file");
 &print_tempfile($FH, join("\n", @$newlines)."\n");
@@ -653,13 +718,13 @@ return 0;
 sub package_loads_crs
 {
 foreach my $c ("/etc/apache2/mods-enabled/security2.conf",
-	       "/etc/apache2/mods-available/security2.conf") {
-	next if (!-r $c);
-	my $lref = &read_file_lines($c, 1);
-	foreach my $l (@$lref) {
+	       "/etc/apache2/mods-available/security2.conf",
+	       $config{'modsec_conf'}) {
+	next if (!$c || !-r $c);
+	foreach my $l (@{&read_file_lines($c, 1)}) {
 		next if ($l =~ /^\s*#/);
-		return 1 if ($l =~ /modsecurity-crs.*\.load/i ||
-			     $l =~ /\Q$config{'crs_load'}\E/);
+		return 1 if ($l =~ /modsecurity[-_]crs.*\.load/i ||
+			     ($config{'crs_load'} && $l =~ /\Q$config{'crs_load'}\E/));
 		}
 	}
 return 0;
@@ -709,6 +774,7 @@ sub enable_crs
 	return (0, "Could not create $config{'crs_setup'} (no template found). ".
 		   "CRS not enabled to avoid breaking Apache.");
 my $f = $config{'crs_enable_file'};
+&ensure_parent_dir($f);
 &backup_file($f);
 if (&package_loads_crs()) {
 	# Apache already loads the CRS itself; make sure our include is gone so
@@ -784,6 +850,7 @@ foreach my $dom (sort @active) {
 	push(@lines, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=$mode\"");
 	$gid++;
 	}
+&ensure_parent_dir($f);
 &open_tempfile(my $FH, ">$f", 1) || return (0, "Cannot write $f");
 &print_tempfile($FH, join("\n", @lines)."\n");
 &close_tempfile($FH);

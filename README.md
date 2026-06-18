@@ -62,6 +62,22 @@ the rule engine and install/tune the OWASP Core Rule Set.
 > You can do the `SecRuleEngine` step and CRS install from the module itself
 > after it's installed — see [Usage](#usage).
 
+### Platform support (Debian/Ubuntu and RHEL family)
+
+The module auto-detects the web server. On Debian/Ubuntu it uses the `apache2`
+paths (`apache2ctl`, `/var/log/apache2`, `/etc/apache2`, `apt`). On
+**AlmaLinux/CentOS/RHEL (httpd)** it automatically switches to the `httpd`
+equivalents — `apachectl`, `/var/log/httpd/error_log`, `/etc/httpd/conf.d`,
+`/etc/httpd/conf.d/mod_security.conf`, `dnf`/`yum`, and writes its managed rule
+files to `/etc/httpd/modsecurity.d/local_rules/`. Detection is in-memory only;
+your saved Module Config is never overwritten, and you can still override any
+path there. The **Logs** page shows the detected platform and effective paths.
+
+> On RHEL the CRS package/paths vary by build — if CRS install/version checks
+> don't work, set `crs_dir` / `crs_load` / `crs_setup` under Module Config. Also
+> confirm your `mod_security.conf` includes `modsecurity.d/local_rules/*.conf`
+> (the stock package usually does) so the allow/block rules are loaded.
+
 ---
 
 ## Installation
