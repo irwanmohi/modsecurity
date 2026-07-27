@@ -1054,6 +1054,68 @@ if (@clean) {
 return &apply_changes();
 }
 
+# dos_available()
+# True if the CRS ships the DoS-protection ruleset.
+sub dos_available
+{
+return scalar(glob("$config{'crs_dir'}/rules/*DOS-PROTECTION*.conf")) ? 1 : 0;
+}
+
+# get_dos_params()
+# Return the DoS-protection settings: enabled flag + burst/threshold/timeout.
+sub get_dos_params
+{
+my %p = (enabled => 0, slice => 60, threshold => 100, timeout => 600);
+my $f = $config{'crs_setup'};
+return %p if (!-r $f);
+my $in = 0;
+foreach my $l (@{&read_file_lines($f, 1)}) {
+	$in = 1 if ($l =~ /^#\s*BEGIN vmm-dos/);
+	if ($in) {
+		$p{'enabled'}   = 1;
+		$p{'slice'}     = $1 if ($l =~ /setvar:tx\.dos_burst_time_slice=(\d+)/);
+		$p{'threshold'} = $1 if ($l =~ /setvar:tx\.dos_counter_threshold=(\d+)/);
+		$p{'timeout'}   = $1 if ($l =~ /setvar:tx\.dos_block_timeout=(\d+)/);
+		}
+	$in = 0 if ($l =~ /^#\s*END vmm-dos/);
+	}
+return %p;
+}
+
+# set_dos_params($enabled, $slice, $threshold, $timeout)
+# Write/replace a managed SecAction block that turns the CRS per-IP DoS
+# protection on (with thresholds) or removes it when disabled.
+sub set_dos_params
+{
+my ($enabled, $slice, $threshold, $timeout) = @_;
+foreach my $v ($slice, $threshold, $timeout) {
+	$v =~ /^\d+$/ || return (0, "Thresholds must be whole numbers");
+	}
+my $f = $config{'crs_setup'};
+return (0, "Cannot read $f") if (!-r $f);
+my $lref = &read_file_lines($f);
+my (@keep, $in);
+foreach my $l (@$lref) {
+	$in = 1 if ($l =~ /^#\s*BEGIN vmm-dos/);
+	push(@keep, $l) if (!$in);
+	$in = 0 if ($l =~ /^#\s*END vmm-dos/);
+	}
+if ($enabled) {
+	my $gid = ($config{'id_base'} || 9000000) - 3;
+	push(@keep, "# BEGIN vmm-dos");
+	push(@keep, "SecAction \\");
+	push(@keep, "  \"id:$gid,phase:1,nolog,pass,t:none,\\");
+	push(@keep, "    setvar:tx.dos_burst_time_slice=$slice,\\");
+	push(@keep, "    setvar:tx.dos_counter_threshold=$threshold,\\");
+	push(@keep, "    setvar:tx.dos_block_timeout=$timeout\"");
+	push(@keep, "# END vmm-dos");
+	}
+@$lref = @keep;
+&backup_file($f);
+&flush_file_lines($f);
+return &apply_changes();
+}
+
 # tail_lines($file, $n)
 # Return the last $n lines of a file without slurping the whole thing.
 sub tail_lines

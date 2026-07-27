@@ -178,6 +178,10 @@ From the dashboard, open **Engine & Core Rule Set settings** to:
 - Enable **Application Exclusions** — tick WordPress, Drupal, Nextcloud,
   phpMyAdmin, etc. (auto-detected from the installed CRS) to load the CRS's
   ready-made false-positive exclusions for those apps.
+- Turn on **DoS Protection** — basic per-IP rate limiting via the CRS DoS
+  rules (max requests / time window / block duration). Note this is
+  application-layer only; it is **not** a substitute for network DDoS
+  protection (Cloudflare / your provider + fail2ban).
 
 > **CMS tuning note:** OWASP CRS works fine with WordPress and Joomla — at
 > **Paranoia Level 1** (the default). PL3–4 will flag normal CMS traffic as

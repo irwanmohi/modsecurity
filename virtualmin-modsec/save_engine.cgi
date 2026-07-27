@@ -32,6 +32,10 @@ elsif ($sec eq "appexcl") {
 	my @apps = grep { $in{"excl_$_"} } &available_crs_exclusions();
 	($ok, $err) = &set_crs_exclusions(\@apps);
 	}
+elsif ($sec eq "dos") {
+	($ok, $err) = &set_dos_params($in{'dos_on'}, $in{'dos_slice'},
+				      $in{'dos_threshold'}, $in{'dos_timeout'});
+	}
 else {
 	&error($text{'eng_badsec'});
 	}

@@ -103,6 +103,28 @@ else {
 			print "<p><font size=-1>",$text{'eng_appexcl_hint'},"</font></p>\n";
 			print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
 			}
+
+		# DoS protection (per-IP rate limiting) if the CRS provides it.
+		if (&dos_available()) {
+			my %d = &get_dos_params();
+			print &ui_form_start("save_engine.cgi", "post");
+			print &ui_hidden("section", "dos");
+			print &ui_table_start($text{'eng_dos'}, "width=100%", 2);
+			print &ui_table_row($text{'eng_dos_enable'},
+				&ui_yesno_radio("dos_on", $d{'enabled'}));
+			print &ui_table_row($text{'eng_dos_thresh'},
+				&ui_textbox("dos_threshold", $d{'threshold'}, 6)." ".
+				$text{'eng_dos_thresh_h'});
+			print &ui_table_row($text{'eng_dos_slice'},
+				&ui_textbox("dos_slice", $d{'slice'}, 6)." ".
+				$text{'eng_dos_slice_h'});
+			print &ui_table_row($text{'eng_dos_timeout'},
+				&ui_textbox("dos_timeout", $d{'timeout'}, 6)." ".
+				$text{'eng_dos_timeout_h'});
+			print &ui_table_end();
+			print "<p><font size=-1>",$text{'eng_dos_hint'},"</font></p>\n";
+			print &ui_form_end([ [ undef, $text{'eng_save'} ] ]);
+			}
 		}
 	}
 

@@ -134,6 +134,15 @@ eng_anomaly_hint=(lower = blocks more aggressively; default 5)
 eng_appexcl=Application Exclusions
 eng_appexcl_apps=Reduce false positives for
 eng_appexcl_hint=Tick the apps you run to load the CRS's ready-made exclusions for them (fewer false positives). Note: the CRS has no Joomla package — for Joomla use Paranoia 1 and Allow specific rules. Joomla/WordPress both work best at Paranoia level 1.
+eng_dos=DoS Protection (per-IP rate limiting)
+eng_dos_enable=Enable
+eng_dos_thresh=Max requests
+eng_dos_thresh_h=requests from one IP within the window before it's throttled (default 100)
+eng_dos_slice=Time window
+eng_dos_slice_h=seconds to count requests over (default 60)
+eng_dos_timeout=Block for
+eng_dos_timeout_h=seconds to block an IP that exceeds the limit (default 600)
+eng_dos_hint=Basic application-layer rate limiting via the CRS DoS rules — helps against HTTP floods, aggressive bots and scrapers. It is NOT protection against large volumetric (network) DDoS; use Cloudflare/your provider and fail2ban for that. Set the threshold high enough that normal visitors and shared-NAT IPs aren't caught. Whitelisted IPs are exempt.
 
 allow_title=Allow Rule
 allow_err=Failed to allow rule
