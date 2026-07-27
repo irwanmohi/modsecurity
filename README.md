@@ -327,6 +327,9 @@ it manually and reload Apache if you want the rules back to default.
 
 ## Roadmap
 
+Ticked items are shipped. **Unticked items are not built yet** — there is no
+setting for them in the module.
+
 - [x] Dashboard with per-domain grouping
 - [x] One-click allow / remove (host-scoped)
 - [x] SecRuleEngine toggle (global)
