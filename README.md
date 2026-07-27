@@ -339,7 +339,19 @@ it manually and reload Apache if you want the rules back to default.
 - [x] Hide already-allowed rules from the dashboard
 - [x] Scan all per-domain Virtualmin error logs
 - [x] Per-day attack timeline chart
-- [x] Config backup + restore before each change
+- [x] Config backup + restore before each change (throttled + rotated)
+- [x] Events grouped by client IP, with one-click whitelist / block
+- [x] IP blocklist (deny 403)
+- [x] CRS application exclusions (WordPress, Drupal, phpMyAdmin, …)
+- [x] CRS version check (OWASP) + update via package manager
+- [x] Auto-detect httpd (AlmaLinux/CentOS/RHEL) as well as apache2
+- [x] DoS protection toggle (per-IP rate limiting via CRS)
+- [ ] fail2ban integration (auto-ban repeat offenders at the firewall)
+- [ ] Email/notification on attack spikes
+
+**Out of scope:** network-layer (volumetric) DDoS protection. ModSecurity is a
+Layer-7 WAF — use Cloudflare or your provider's DDoS service, plus fail2ban,
+for that.
 
 ---
 
