@@ -140,6 +140,48 @@ On the confirm screen you can optionally enter a **parameter** (e.g.
 that field instead of disabling the whole rule — safer, since the rule still
 protects every other parameter.
 
+### Behind a reverse proxy (HAProxy, nginx, load balancer)
+
+By default the IP whitelist and blocklist match `REMOTE_ADDR`, the address
+Apache sees the connection coming from. **If this server sits behind a reverse
+proxy, that address is the proxy** — so a whitelist would never let anyone
+through and a blocklist would never stop anyone. Both fail silently.
+
+Under **Module Config**, set *Where to read the visitor's IP from* to
+**X-Forwarded-For**, and list your proxy/load-balancer addresses in *Trusted
+proxy addresses*. The module then writes a chained rule that first proves the
+request really came from one of those proxies, and only then matches the
+forwarded IP:
+
+```apache
+SecRule REMOTE_ADDR "@ipMatch 10.0.0.1" \
+    "id:9200000,phase:1,pass,nolog,ctl:ruleEngine=Off,chain"
+    SecRule REQUEST_HEADERS:X-Forwarded-For "@ipMatch 203.0.113.5"
+```
+
+The proxy check is mandatory — the module refuses to save without it. Matching
+`X-Forwarded-For` on its own would let anyone send that header to bypass the
+WAF or dodge a block. The IP pages show which mode is active.
+
+Two caveats worth knowing:
+
+- **`@ipMatch` expects a single address.** If `X-Forwarded-For` arrives with
+  several comma-separated hops, the match can fail. Have the proxy set a single
+  value (HAProxy: `http-request set-header X-Forwarded-For %[src]`).
+- **The By-IP view and dashboard read the IP from Apache's error log**, which
+  also shows the proxy unless Apache itself is resolving the real address.
+
+Both are solved properly by **`mod_remoteip`**, which rewrites the address
+Apache uses everywhere — logs included — so you can leave this setting on
+*Connection address*:
+
+```apache
+RemoteIPHeader X-Forwarded-For
+RemoteIPInternalProxy 10.0.0.1
+```
+
+Use `mod_remoteip` if you can; use the X-Forwarded-For mode when you can't.
+
 ### Trusted IP whitelist
 
 Open **Trusted IP whitelist** from the dashboard and enter one IP or CIDR per

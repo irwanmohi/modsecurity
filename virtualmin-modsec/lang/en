@@ -167,3 +167,5 @@ ip_title=Trusted IP Whitelist
 ip_intro=Requests from these IP addresses bypass ModSecurity entirely. Use for your admin/office IP, monitoring services, or payment gateway callbacks that get false-positive blocks.
 ip_hint=One IP or CIDR range per line, e.g. 203.0.113.5 or 198.51.100.0/24. Both IPv4 and IPv6 are accepted. Leave empty to remove the whitelist.
 ip_err=Failed to apply IP whitelist
+ip_mode_direct=Matching visitors by their connection address (REMOTE_ADDR). If this server sits behind a reverse proxy or load balancer, that is the proxy's address and these rules will never match — switch "Where to read the visitor's IP from" to X-Forwarded-For under Module Config.
+ip_mode_xff=Behind a reverse proxy: matching X-Forwarded-For, but only for requests arriving from the trusted proxies $1.

@@ -9,6 +9,7 @@ require './modsec-lib.pl';
 my @ips = &get_ip_whitelist();
 
 print "<p>",$text{'ip_intro'},"</p>\n";
+print "<p>",&ip_mode_note(),"</p>\n";
 print &ui_form_start("save_ipwhitelist.cgi", "post");
 print &ui_textarea("ips", join("\n", @ips), 8, 50);
 print "<p><font size=-1>",$text{'ip_hint'},"</font></p>\n";

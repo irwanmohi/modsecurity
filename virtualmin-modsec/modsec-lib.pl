@@ -551,6 +551,71 @@ return 1 if ($ip =~ /:/ && $ip =~ /^[0-9a-fA-F:]+(\/\d{1,3})?$/); # IPv6
 return 0;
 }
 
+# ip_rule_lines($gid, $list, $actions)
+# Build the SecRule lines that match the visitor's IP against $list and apply
+# $actions. Behind a reverse proxy (HAProxy, nginx, a load balancer) REMOTE_ADDR
+# is the proxy's address, not the visitor's, so plain REMOTE_ADDR rules never
+# match -- whitelists let nobody through and blocklists stop nobody. In "xff"
+# mode we chain two conditions: first prove the request really arrived from a
+# trusted proxy, then match the forwarded client IP. The proxy check is not
+# optional -- matching X-Forwarded-For alone would let anyone spoof that header
+# to bypass the WAF (whitelist) or dodge a block.
+# Returns (\@lines) on success, or (undef, $error).
+sub ip_rule_lines
+{
+my ($gid, $list, $actions) = @_;
+if (&client_ip_source() ne 'xff') {
+	return ([ "SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
+		  "    \"id:$gid,$actions\"" ]);
+	}
+my ($plist, $perr) = &trusted_proxy_list();
+$plist || return (undef, $perr);
+return ([ "SecRule REMOTE_ADDR \"\@ipMatch $plist\" \\",
+	  "    \"id:$gid,$actions,chain\"",
+	  "    SecRule REQUEST_HEADERS:X-Forwarded-For \"\@ipMatch $list\"" ]);
+}
+
+# client_ip_source()
+# Where the visitor's IP should be read from: "remote_addr" (default, direct
+# connections) or "xff" (behind a reverse proxy).
+sub client_ip_source
+{
+return $config{'client_ip_source'} eq 'xff' ? 'xff' : 'remote_addr';
+}
+
+# trusted_proxy_list()
+# Validated, comma-joined list of proxy addresses for the chain check.
+# Returns (undef, $error) when unset or malformed, since an unverified
+# X-Forwarded-For match would be a security hole rather than a fix.
+sub trusted_proxy_list
+{
+my @prox;
+foreach my $p (split(/[\s,]+/, $config{'trusted_proxies'})) {
+	next if ($p eq "");
+	&valid_ip_entry($p) ||
+		return (undef, "Invalid trusted proxy address: $p");
+	push(@prox, $p);
+	}
+@prox || return (undef,
+	"Reverse-proxy mode is on but no trusted proxy addresses are set. ".
+	"Add your proxy/load-balancer IPs under Module Config, otherwise ".
+	"anyone could spoof X-Forwarded-For to bypass or dodge these rules.");
+return (join(",", @prox));
+}
+
+# ip_mode_note()
+# One line describing how visitor IPs are currently matched, shown on the IP
+# pages so a wrong proxy setting is visible instead of silently doing nothing.
+sub ip_mode_note
+{
+if (&client_ip_source() eq 'xff') {
+	my ($plist, $perr) = &trusted_proxy_list();
+	return "<font color=#cc0000>".&html_escape($perr)."</font>" if (!$plist);
+	return &text('ip_mode_xff', "<tt>".&html_escape($plist)."</tt>");
+	}
+return $text{'ip_mode_direct'};
+}
+
 # set_ip_whitelist(\@ips)
 # Replace the trusted-IP whitelist with @ips (one ipMatch rule that turns the
 # engine off for those addresses), then reload with rollback on failure.
@@ -572,11 +637,13 @@ if (!@clean) {
 	}
 my $gid = ($config{'id_base'} || 9000000) + 200000;
 my $list = join(",", @clean);
+my ($rule, $rerr) = &ip_rule_lines($gid, $list,
+				   "phase:1,pass,nolog,ctl:ruleEngine=Off");
+$rule || return (0, $rerr);
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - trusted IP whitelist.",
 	"# virtualmin-modsec-ipwhitelist: $list",
-	"SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
-	"    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=Off\"");
+	@$rule);
 return &write_test_rollback($f, \@lines, $old);
 }
 
@@ -629,12 +696,13 @@ if (!@clean) {
 	}
 my $gid = ($config{'id_base'} || 9000000) + 300000;
 my $list = join(",", @clean);
+my ($rule, $rerr) = &ip_rule_lines($gid, $list,
+	"phase:1,deny,status:403,log,msg:'IP blocked by ModSecurity Manager'");
+$rule || return (0, $rerr);
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - IP blocklist.",
 	"# virtualmin-modsec-ipblocklist: $list",
-	"SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
-	"    \"id:$gid,phase:1,deny,status:403,log,".
-	"msg:'IP blocked by ModSecurity Manager'\"");
+	@$rule);
 return &write_test_rollback($f, \@lines, $old);
 }
 
