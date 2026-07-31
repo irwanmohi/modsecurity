@@ -1032,7 +1032,15 @@ sub set_crs_params
 {
 my ($pl, $an) = @_;
 $pl =~ /^[1-4]$/ || return (0, "Paranoia level must be 1-4");
-$an =~ /^\d+$/   || return (0, "Anomaly threshold must be a number");
+# The CRS blocks when anomaly_score >= threshold, and a clean request scores 0,
+# so a threshold of 0 would deny every single request. Refuse it rather than
+# take every site on the server down.
+($an =~ /^\d+$/ && $an >= 1) ||
+	return (0, "Anomaly threshold must be 1 or higher. A threshold of 0 ".
+		   "would block every request, including legitimate traffic ".
+		   "(the CRS blocks when the score reaches the threshold, and ".
+		   "clean requests score 0). The CRS default is 5; to turn ".
+		   "blocking off, set the rule engine to Off or DetectionOnly.");
 my $f = $config{'crs_setup'};
 return (0, "Cannot read $f") if (!-r $f);
 my $lref = &read_file_lines($f);
@@ -1156,8 +1164,13 @@ return %p;
 sub set_dos_params
 {
 my ($enabled, $slice, $threshold, $timeout) = @_;
+# Zero is rejected for the same reason as the anomaly threshold: a request
+# counter limit of 0 would throttle every visitor immediately.
 foreach my $v ($slice, $threshold, $timeout) {
-	$v =~ /^\d+$/ || return (0, "Thresholds must be whole numbers");
+	($v =~ /^\d+$/ && $v >= 1) ||
+		return (0, "DoS values must be 1 or higher. A limit of 0 would ".
+			   "throttle every visitor. Defaults: 100 requests / ".
+			   "60 seconds / 600 second block.");
 	}
 my $f = $config{'crs_setup'};
 return (0, "Cannot read $f") if (!-r $f);

@@ -130,7 +130,7 @@ eng_pl=Paranoia level
 eng_pl1=least strict, fewest false positives
 eng_pl4=most strict, most false positives
 eng_anomaly=Inbound anomaly threshold
-eng_anomaly_hint=(lower = blocks more aggressively; default 5)
+eng_anomaly_hint=(minimum 1, CRS default 5. This is the score at which a request is blocked, NOT an on/off switch — lower blocks more aggressively. To stop blocking, set the engine to DetectionOnly or Off.)
 eng_appexcl=Application Exclusions
 eng_appexcl_apps=Reduce false positives for
 eng_appexcl_hint=Tick the apps you run to load the CRS's ready-made exclusions for them (fewer false positives). Note: the CRS has no Joomla package — for Joomla use Paranoia 1 and Allow specific rules. Joomla/WordPress both work best at Paranoia level 1.
