@@ -29,6 +29,8 @@ my %map = (
 			  "$lr/virtualmin-modsec-exclusions.conf" ],
   domain_engine_file => [ "/etc/modsecurity/virtualmin-modsec-domains.conf",
 			  "$lr/virtualmin-modsec-domains.conf" ],
+  path_engine_file   => [ "/etc/modsecurity/virtualmin-modsec-engine-paths.conf",
+			  "$lr/virtualmin-modsec-engine-paths.conf" ],
   ip_whitelist_file  => [ "/etc/modsecurity/virtualmin-modsec-ipwhitelist.conf",
 			  "$lr/virtualmin-modsec-ipwhitelist.conf" ],
   ip_blocklist_file  => [ "/etc/modsecurity/virtualmin-modsec-ipblock.conf",
@@ -502,7 +504,8 @@ return @out;
 sub managed_paths
 {
 my @keys = qw(modsec_conf crs_setup exclusion_file domain_engine_file
-	      ip_whitelist_file ip_blocklist_file crs_enable_file);
+	      path_engine_file ip_whitelist_file ip_blocklist_file
+	      crs_enable_file);
 return grep { $_ } map { $config{$_} } @keys;
 }
 
@@ -923,6 +926,121 @@ foreach my $dom (sort @active) {
 &print_tempfile($FH, join("\n", @lines)."\n");
 &close_tempfile($FH);
 return 1;
+}
+
+# --- Per-path engine mode ------------------------------------------------
+# A whole domain is often too blunt. A Joomla or WordPress admin area behind a
+# login triggers false positives that would stop staff saving content, while
+# the public side is exactly where scanners attack and must stay enforced. So
+# a URL prefix can carry its own engine mode, overriding the domain and global
+# setting. These rules live in their own file, named so it loads after the
+# per-domain file (more specific wins) but before the IP whitelist (a trusted
+# IP still gets the final say).
+
+# valid_engine_path($path)
+# A URL prefix we can safely embed in a rule: absolute, and free of quotes,
+# backslashes and whitespace that would break out of the SecRule argument.
+sub valid_engine_path
+{
+return $_[0] =~ m{^/[^"'\\\s]*$} ? 1 : 0;
+}
+
+# list_path_engine()
+# Parse the managed per-path file into hash refs: domain (may be empty),
+# path, mode, genid.
+sub list_path_engine
+{
+my $f = $config{'path_engine_file'};
+my @out;
+return @out if (!-r $f);
+my $lref = &read_file_lines($f, 1);
+my $i = 0;
+while ($i < @$lref) {
+	if ($lref->[$i] =~
+	    /^#\s*virtualmin-modsec-path:\s*domain=(\S*)\s+mode=(\S+)\s+path=(\S+)/) {
+		my ($dom, $mode, $path) = ($1, $2, $3);
+		my ($gid, $j) = (undef, $i + 1);
+		while ($j < @$lref && $lref->[$j] ne "" &&
+		       $lref->[$j] !~ /^#\s*virtualmin-modsec-path:/) {
+			if ($lref->[$j] =~ /id:(\d+)/) { $gid = $1; last; }
+			$j++;
+			}
+		push(@out, { domain => $dom, mode => $mode, path => $path,
+			     genid => $gid });
+		}
+	$i++;
+	}
+return @out;
+}
+
+# write_path_engine(\@entries)
+# Rebuild the per-path file from scratch. Each entry needs domain (possibly
+# empty), path and mode. Returns (1) or (0, error).
+sub write_path_engine
+{
+my ($ents) = @_;
+my $f = $config{'path_engine_file'};
+my $old = -r $f ? &read_file_contents($f) : undef;
+if (!@$ents) {
+	&backup_file($f);
+	unlink($f) if (-e $f);
+	return &apply_changes();
+	}
+my @lines = (
+	"# Managed by Virtualmin ModSecurity Manager - per-path engine modes.",
+	"# Do not edit by hand.");
+# Own id range so these never collide with the exclusion, per-domain or IP
+# rules the module also generates.
+my $gid = ($config{'id_base'} || 9000000) + 400000;
+foreach my $e (@$ents) {
+	my ($dom, $path, $mode) = ($e->{'domain'}, $e->{'path'}, $e->{'mode'});
+	$dom = "" if (!defined $dom);
+	$mode =~ /^(On|Off|DetectionOnly)$/ || return (0, "Invalid mode: $mode");
+	&valid_engine_path($path) || return (0, "Invalid path: $path");
+	$dom =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain: $dom");
+	push(@lines, "");
+	push(@lines, "# virtualmin-modsec-path: domain=$dom mode=$mode path=$path");
+	if ($dom) {
+		push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $dom\" \\");
+		push(@lines, "    \"id:$gid,phase:1,pass,nolog,".
+			     "ctl:ruleEngine=$mode,chain\"");
+		push(@lines, "    SecRule REQUEST_URI \"\@beginsWith $path\"");
+		}
+	else {
+		push(@lines, "SecRule REQUEST_URI \"\@beginsWith $path\" \\");
+		push(@lines, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=$mode\"");
+		}
+	$gid++;
+	}
+return &write_test_rollback($f, \@lines, $old);
+}
+
+# add_path_engine($domain, $path, $mode)
+# Add or update the rule for one domain+path pair, then reload.
+sub add_path_engine
+{
+my ($domain, $path, $mode) = @_;
+$domain = "" if (!defined $domain);
+$path =~ s/^\s+|\s+$//g;
+&valid_engine_path($path) ||
+	return (0, "Path must start with / and contain no spaces or quotes, ".
+		   "for example /administrator/");
+$mode =~ /^(On|Off|DetectionOnly)$/ || return (0, "Invalid engine mode");
+$domain =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain");
+my @ents = grep { !($_->{'domain'} eq $domain && $_->{'path'} eq $path) }
+		&list_path_engine();
+push(@ents, { domain => $domain, path => $path, mode => $mode });
+return &write_path_engine(\@ents);
+}
+
+# remove_path_engine($genid)
+# Drop the rule with this generated id, then reload.
+sub remove_path_engine
+{
+my ($genid) = @_;
+$genid =~ /^\d+$/ || return (0, "Invalid rule id");
+my @ents = grep { $_->{'genid'} ne $genid } &list_path_engine();
+return &write_path_engine(\@ents);
 }
 
 # set_domain_engine($domain, $mode)

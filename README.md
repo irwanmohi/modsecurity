@@ -240,6 +240,50 @@ host-scoped `ctl:ruleEngine` rules in
 `/etc/modsecurity/virtualmin-modsec-domains.conf` — no vhost editing, and a
 problem site can be set to DetectionOnly while every other site stays On.
 
+### Per-path engine mode (CMS admin areas)
+
+A whole domain is often too blunt. Editing an article in Joomla or WordPress
+trips XSS and HTML-injection rules on the editor field, which would stop staff
+saving content — but the public side of that same site is exactly where
+scanners probe and must stay enforced.
+
+Open **Per-path engine mode** and add a URL prefix with its own mode, e.g.
+`/administrator/` → **Detection only**. Leave the domain blank to apply it to
+every site, or pick one. The module writes to
+`/etc/modsecurity/virtualmin-modsec-engine-paths.conf`:
+
+```apache
+# domain blank — applies to every site
+SecRule REQUEST_URI "@beginsWith /administrator/" \
+    "id:9400000,phase:1,pass,nolog,ctl:ruleEngine=DetectionOnly"
+
+# scoped to one domain
+SecRule REQUEST_HEADERS:Host "@streq skm.gov.my" \
+    "id:9400001,phase:1,pass,nolog,ctl:ruleEngine=DetectionOnly,chain"
+    SecRule REQUEST_URI "@beginsWith /administrator/"
+```
+
+Common prefixes: Joomla `/administrator/`, WordPress `/wp-admin/`, Drupal
+`/admin/`. Matching is by prefix, so `/administrator/` covers everything below
+it.
+
+**Precedence** — path rules override the per-domain and global engine mode; a
+whitelisted IP still overrides both. This comes from load order, which is why
+the managed files are named the way they are.
+
+> Treat a DetectionOnly admin area as temporary. Once a week or two of logs has
+> accumulated, replace it with precise exclusions for the fields that actually
+> trip — via **Allow** with a parameter, e.g. rule 941100 on
+> `ARGS:jform[articletext]` — then delete the path rule so the admin area is
+> enforced again.
+
+> **Migrating a hand-written rule?** Delete it after adding the equivalent here.
+> Two rules doing the same job is confusing, and if the old one uses an id in a
+> range the module generates (`9000001+` exclusions, `9100000+` per-domain,
+> `9200000` whitelist, `9300000` blocklist, `9400000+` per-path) Apache will
+> refuse to start with *"Found another rule with the same id"* the next time
+> that feature is used.
+
 ### Recommended workflow
 
 1. Set the engine to **DetectionOnly** and install the CRS.
@@ -376,6 +420,7 @@ setting for them in the module.
 - [x] One-click allow / remove (host-scoped)
 - [x] SecRuleEngine toggle (global)
 - [x] Per-domain engine mode (On / DetectionOnly / Off)
+- [x] Per-path engine mode (CMS admin areas)
 - [x] CRS install / enable + Paranoia Level + anomaly threshold
 - [x] Per-parameter whitelist (`ctl:ruleRemoveTargetById`)
 - [x] Trusted IP whitelist (`@ipMatch`)

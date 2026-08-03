@@ -34,6 +34,20 @@ index_return=dashboard
 index_managed=View applied exclusions
 index_settings=Engine & Core Rule Set settings
 index_perdomain=Per-domain engine mode
+index_perpath=Per-path engine mode
+
+path_title=Per-Path Engine Mode
+path_intro=Run one URL prefix in a different ModSecurity mode from the rest of the site. Typically used to keep a CMS admin area on Detection only — where editing content trips false positives — while the public side of the same site stays fully enforced.
+path_path=URL path prefix
+path_path_hint=Matches the start of the URL. Joomla admin: /administrator/ &nbsp; WordPress: /wp-admin/ &nbsp; Drupal: /admin/
+path_alldoms=All domains
+path_dom_hint=(blank = all domains)
+path_add=Add a path rule
+path_addbtn=Add rule
+path_none=No path rules yet — every URL follows its domain or the global engine mode.
+path_order=Path rules override the per-domain and global engine mode. A whitelisted IP still overrides both. Rules are matched by URL prefix, so /administrator/ also covers everything beneath it.
+path_err=Failed to add path rule
+path_rmerr=Failed to remove path rule
 index_ipwhitelist=Trusted IP whitelist
 index_livelog=Live log
 index_stats=Statistics
