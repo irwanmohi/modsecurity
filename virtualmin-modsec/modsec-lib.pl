@@ -263,6 +263,20 @@ if (&foreign_check("virtual-server")) {
 return sort @doms;
 }
 
+# host_match_op($domain)
+# The operator and argument that match a site's Host header.
+# An exact match is wrong here: Virtualmin lists a site as "example.com" while
+# visitors normally arrive as "www.example.com", and the header can carry a
+# port. A strict comparison would simply never fire, with no error to show for
+# it -- so accept the bare name, the www. form, and an optional :port.
+sub host_match_op
+{
+my ($dom) = @_;
+$dom =~ s/^www\.//i;         # normalise, so either form yields one pattern
+$dom =~ s/\./\\./g;          # the only regex metacharacter a hostname can hold
+return '@rx ^(?:www\.)?'.$dom.'(?::\d+)?$';
+}
+
 # list_exclusions()
 # Parse the managed exclusion file and return existing entries as hash refs
 # with keys: ruleid, domain, genid (the generated SecRule id), line.
@@ -332,7 +346,8 @@ push(@lines, "");
 push(@lines, "# virtualmin-modsec: domain=$domain ruleid=$ruleid".
 	     ($target ne "" ? " target=$target" : ""));
 if ($domain) {
-	push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $domain\" \\");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"".
+		     &host_match_op($domain)."\" \\");
 	push(@lines, "    \"id:$gid,phase:1,pass,nolog,$ctl\"");
 	}
 else {
@@ -917,7 +932,8 @@ foreach my $dom (sort @active) {
 	next if ($mode !~ /^(On|Off|DetectionOnly)$/);
 	push(@lines, "");
 	push(@lines, "# virtualmin-modsec-engine: domain=$dom mode=$mode");
-	push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $dom\" \\");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"".
+	     &host_match_op($dom)."\" \\");
 	push(@lines, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=$mode\"");
 	$gid++;
 	}
@@ -1001,7 +1017,8 @@ foreach my $e (@$ents) {
 	push(@lines, "");
 	push(@lines, "# virtualmin-modsec-path: domain=$dom mode=$mode path=$path");
 	if ($dom) {
-		push(@lines, "SecRule REQUEST_HEADERS:Host \"\@streq $dom\" \\");
+		push(@lines, "SecRule REQUEST_HEADERS:Host \"".
+	     &host_match_op($dom)."\" \\");
 		push(@lines, "    \"id:$gid,phase:1,pass,nolog,".
 			     "ctl:ruleEngine=$mode,chain\"");
 		push(@lines, "    SecRule REQUEST_URI \"\@beginsWith $path\"");

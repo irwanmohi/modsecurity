@@ -258,7 +258,7 @@ SecRule REQUEST_URI "@beginsWith /administrator/" \
     "id:9400000,phase:1,pass,nolog,ctl:ruleEngine=DetectionOnly"
 
 # scoped to one domain
-SecRule REQUEST_HEADERS:Host "@streq skm.gov.my" \
+SecRule REQUEST_HEADERS:Host "@rx ^(?:www\.)?skm\.gov\.my(?::\d+)?$" \
     "id:9400001,phase:1,pass,nolog,ctl:ruleEngine=DetectionOnly,chain"
     SecRule REQUEST_URI "@beginsWith /administrator/"
 ```
@@ -334,7 +334,7 @@ default `IncludeOptional /etc/modsecurity/*.conf`):
 
 ```apache
 # virtualmin-modsec: domain=client-a.com ruleid=942100
-SecRule REQUEST_HEADERS:Host "@streq client-a.com" \
+SecRule REQUEST_HEADERS:Host "@rx ^(?:www\.)?client-a\.com(?::\d+)?$" \
     "id:9000001,phase:1,pass,nolog,ctl:ruleRemoveById=942100"
 ```
 
@@ -342,6 +342,13 @@ SecRule REQUEST_HEADERS:Host "@streq client-a.com" \
   matter and it survives CRS updates.
 - Scoped by `Host`, so allowing a rule for one site never weakens another.
 - Leaving the domain empty writes a global `SecRuleRemoveById` instead.
+
+**Why a regex and not an exact match** — Virtualmin lists a site as
+`example.com` while visitors normally arrive as `www.example.com`, and the Host
+header can carry a port. An exact comparison would simply never fire, silently.
+The pattern is anchored at both ends, so it accepts the bare name, the `www.`
+form and an optional `:port`, while `evil-example.com` and
+`example.com.attacker.net` still do not match.
 
 ---
 
