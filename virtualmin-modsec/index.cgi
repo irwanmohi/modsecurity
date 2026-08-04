@@ -12,6 +12,7 @@ my $state = &get_engine_state();
 my $statetext = $state ? $state : $text{'index_unknown'};
 print &ui_table_start($text{'index_status'}, "width=100%", 2);
 print &ui_table_row($text{'index_engine'}, "<b>$statetext</b>");
+print &ui_table_row($text{'index_version'}, &module_version() || "?");
 print &ui_table_row($text{'index_conf'}, "<tt>$config{'modsec_conf'}</tt>");
 my @logs = &log_files();
 print &ui_table_row($text{'index_logs'},

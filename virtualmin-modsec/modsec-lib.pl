@@ -79,6 +79,24 @@ sub can_access
 return $access{$_[0]};
 }
 
+# module_version()
+# This module's own version, shown on the dashboard so you can tell at a glance
+# which build a server is running -- useful when a feature is missing simply
+# because the installed copy is older than the repo.
+sub module_version
+{
+my %mi;
+eval { %mi = &get_module_info($module_name); };
+return $mi{'version'} if ($mi{'version'});
+foreach my $f ("$module_root_directory/module.info", "module.info") {
+	next if (!$f || !-r $f);
+	foreach my $l (@{&read_file_lines($f, 1)}) {
+		return $1 if ($l =~ /^version=(\S+)/);
+		}
+	}
+return undef;
+}
+
 # modsec_footer(@args)
 # Print a small "created by" credit, then the standard Webmin module footer.
 # All module pages call this instead of ui_print_footer directly.

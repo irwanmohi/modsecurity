@@ -3,6 +3,7 @@ index=ModSecurity Manager
 index_status=ModSecurity Status
 index_engine=Rule engine
 index_conf=Config file
+index_version=Manager version
 index_logs=Logs scanned
 index_logs_view=view
 
