@@ -135,10 +135,23 @@ exclusion so **that rule stops blocking that domain only**. Other rules and
 other domains are unaffected. Apache is config-tested and reloaded
 automatically.
 
-On the confirm screen you can optionally enter a **parameter** (e.g.
-`ARGS:content`, `ARGS:email`, `REQUEST_COOKIES:sessionid`) to whitelist only
-that field instead of disabling the whole rule — safer, since the rule still
-protects every other parameter.
+The confirm screen offers a **scope** dropdown, pre-filled with the fields this
+rule has actually flagged — read from the `found within …` data in your own
+logs, so you are choosing from real culprits rather than guessing:
+
+- **The whole rule** — the rule stops checking anything on this site. Simple,
+  but the protection it gave is gone.
+- **A single field** (e.g. `ARGS:jform[articletext]` for a Joomla article body)
+  — the rule stops checking only that parameter and keeps protecting every
+  other one. Prefer this whenever the log names a field.
+
+A free-text box is there for fields the logs haven't shown yet.
+
+> **Aggregate rules are flagged.** `949110` and `980130` fire because *other*
+> rules scored enough points to cross the anomaly threshold — they are the
+> scoring mechanism, not a detection. Allowing one switches off blocking for
+> the site instead of fixing the false positive, so the screen warns you and
+> points at the specific `941xxx`/`942xxx` entry to allow instead.
 
 ### Behind a reverse proxy (HAProxy, nginx, load balancer)
 

@@ -140,6 +140,51 @@ if ($config{'audit_format'} eq 'json' && -r $config{'audit_log'}) {
 return &parse_blocks_native();
 }
 
+# matched_target($logline)
+# The request field a rule actually fired on, taken from the log's data tag:
+#   [data "Matched Data: sos found within ARGS:video: ..."]
+# yields "ARGS:video". This is what makes a precise exclusion possible -- the
+# log already names the culprit, so nobody has to guess which field to
+# whitelist. Returns undef when the rule logged no field (aggregate rules like
+# 949110 score the whole request rather than one parameter).
+sub matched_target
+{
+my ($line) = @_;
+my ($data) = $line =~ /\[data\s+"([^"]*)"\]/;
+return undef if (!$data);
+# Field names can carry array subscripts, e.g. ARGS:jform[articletext].
+return $1 if ($data =~ /found within ([A-Za-z_]+(?::[^:\s]+)?):/);
+return undef;
+}
+
+# rule_targets($ruleid, $domain)
+# The fields this rule has actually tripped on, most frequent first, so the
+# Allow screen can offer real choices instead of a blank box. $domain may be
+# empty to look across every site.
+sub rule_targets
+{
+my ($ruleid, $domain) = @_;
+my %seen;
+foreach my $e (&parse_blocks()) {
+	next if ($e->{'id'} ne $ruleid);
+	next if ($domain ne "" && $e->{'hostname'} ne $domain);
+	$seen{$e->{'target'}}++ if ($e->{'target'});
+	}
+return sort { $seen{$b} <=> $seen{$a} || $a cmp $b } keys %seen;
+}
+
+# is_aggregate_rule($id)
+# True for the CRS rules that act on the accumulated anomaly score rather than
+# on one request field -- the 949 (blocking evaluation) and 980 (correlation)
+# families. They appear in the dashboard as the rules that "did the blocking",
+# which makes them tempting to allow, but excluding one switches off the scoring
+# mechanism itself instead of fixing a false positive. The real fix is to allow
+# the specific rule that scored the points.
+sub is_aggregate_rule
+{
+return $_[0] =~ /^9(?:49|80)\d{3}$/ ? 1 : 0;
+}
+
 # log_files()
 # Return the list of Apache error logs to scan. Virtualmin gives every domain
 # its own error log, so we gather them from each vhost's ErrorLog directive
@@ -203,6 +248,7 @@ foreach my $log (&log_files()) {
 		($e{'hostname'}) = $l =~ /\[hostname\s+"([^"]*)"\]/;
 		($e{'uri'})      = $l =~ /\[uri\s+"([^"]*)"\]/;
 		($e{'severity'}) = $l =~ /\[severity\s+"([^"]*)"\]/;
+		$e{'target'} = &matched_target($l);
 		($e{'client'})   = $l =~ /\[client\s+([^\]\s]+?)(?::\d+)?\]/;
 		$e{'action'} = ($l =~ /Access denied/i) ? "blocked" : "warning";
 		($e{'time'}) = $l =~ /^\[([^\]]+)\]/;
@@ -237,6 +283,7 @@ foreach my $l (@lines) {
 		($e{'id'})       = $m =~ /\[id\s+"([^"]*)"\]/;
 		($e{'msg'})      = $m =~ /\[msg\s+"([^"]*)"\]/;
 		($e{'severity'}) = $m =~ /\[severity\s+"([^"]*)"\]/;
+		$e{'target'} = &matched_target($m);
 		$e{'action'} = ($m =~ /denied/i) ? "blocked" : "warning";
 		next if (!$e{'id'});
 		push(@out, \%e);
