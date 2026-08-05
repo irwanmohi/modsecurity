@@ -670,12 +670,100 @@ return ([ "SecRule REMOTE_ADDR \"\@ipMatch $plist\" \\",
 	  ($ctl ? " \"$ctl\"" : "") ]);
 }
 
+# apache_config_root()
+# The Apache configuration directory, derived from the vhost directory the
+# module already knows about: /etc/apache2/sites-enabled -> /etc/apache2,
+# /etc/httpd/conf.d -> /etc/httpd. Reusing that setting keeps one source of
+# truth rather than introducing a second way to locate Apache.
+sub apache_config_root
+{
+my $d = $config{'apache_sites'};
+return undef if (!$d);
+$d =~ s{/+$}{};
+$d =~ s{/[^/]+$}{};
+return $d;
+}
+
+# remoteip_loaded()
+# True if mod_remoteip is loaded, asked of the same Apache control binary the
+# module already uses for configtest.
+sub remoteip_loaded
+{
+my ($ctl) = split(/\s+/, $config{'apache_test'});
+return 0 if (!$ctl);
+my $out = &backquote_command("$ctl -M 2>/dev/null");
+return $out =~ /remoteip_module/ ? 1 : 0;
+}
+
+# remoteip_header_configured()
+# True if a RemoteIPHeader directive exists anywhere in the Apache config tree.
+# Being loaded is not enough -- without RemoteIPHeader the module does nothing.
+#
+# SEARCH TRAP: this uses grep -R, not -r. The lowercase form does not follow
+# symlinks while recursing, and sites-enabled/ and conf-enabled/ are entire
+# directories of symlinks -- on Debian the directive normally lives in
+# conf-enabled/remoteip.conf, a symlink. Using -r here would report "not
+# configured" on a server where it plainly is, which would defeat the whole
+# point of this detection.
+sub remoteip_header_configured
+{
+my $root = &apache_config_root();
+return 0 if (!$root || !-d $root);
+my $out = &backquote_command(
+	"grep -RIl -E '^[[:space:]]*RemoteIPHeader[[:space:]]' ".
+	quotemeta($root)." 2>/dev/null");
+return $out =~ /\S/ ? 1 : 0;
+}
+
+# remoteip_active()
+# True when mod_remoteip is both loaded and actually configured. Cached for the
+# request, since it shells out twice. Tests reset $remoteip_cache directly.
+our $remoteip_cache;
+sub remoteip_active
+{
+return $remoteip_cache if (defined $remoteip_cache);
+$remoteip_cache = (&remoteip_loaded() && &remoteip_header_configured()) ? 1 : 0;
+return $remoteip_cache;
+}
+
 # client_ip_source()
-# Where the visitor's IP should be read from: "remote_addr" (default, direct
-# connections) or "xff" (behind a reverse proxy).
+# Where the visitor's IP is actually read from: "remote_addr" (direct
+# connections, and anywhere mod_remoteip is doing its job) or "xff" (behind a
+# reverse proxy with no mod_remoteip).
+#
+# mod_remoteip consumes X-Forwarded-For and removes it from the request before
+# ModSecurity's phase 1 runs, so rules matching REQUEST_HEADERS:X-Forwarded-For
+# can never fire on such a server -- a whitelist configured that way silently
+# protects nobody and a blocklist stops nobody. mod_remoteip has meanwhile put
+# the genuine client address into REMOTE_ADDR, so remote_addr is not a fallback
+# here, it is the correct source. We therefore override the setting rather than
+# emit rules that are known to be inert. The override is disclosed in the
+# generated file's header and on the IP pages -- see client_ip_source_overridden.
 sub client_ip_source
 {
-return $config{'client_ip_source'} eq 'xff' ? 'xff' : 'remote_addr';
+my $want = $config{'client_ip_source'} eq 'xff' ? 'xff' : 'remote_addr';
+return 'remote_addr' if ($want eq 'xff' && &remoteip_active());
+return $want;
+}
+
+# client_ip_source_overridden()
+# True when the configured source was xff but mod_remoteip forced remote_addr.
+sub client_ip_source_overridden
+{
+return ($config{'client_ip_source'} eq 'xff' && &remoteip_active()) ? 1 : 0;
+}
+
+# ip_source_header_comment()
+# Header lines recording the override in the generated file itself, so someone
+# reading the config on disk is not left wondering why it says REMOTE_ADDR when
+# the module config asked for X-Forwarded-For.
+sub ip_source_header_comment
+{
+return () if (!&client_ip_source_overridden());
+return ("# NOTE: module config requests X-Forwarded-For, but mod_remoteip is",
+	"# active here. It consumes that header before ModSecurity evaluates,",
+	"# so such rules could never match, and it has already placed the real",
+	"# client address in REMOTE_ADDR. These rules match REMOTE_ADDR instead.");
 }
 
 # trusted_proxy_list()
@@ -703,6 +791,9 @@ return (join(",", @prox));
 # pages so a wrong proxy setting is visible instead of silently doing nothing.
 sub ip_mode_note
 {
+if (&client_ip_source_overridden()) {
+	return "<font color=#cc8800><b>".$text{'ip_mode_remoteip'}."</b></font>";
+	}
 if (&client_ip_source() eq 'xff') {
 	my ($plist, $perr) = &trusted_proxy_list();
 	return "<font color=#cc0000>".&html_escape($perr)."</font>" if (!$plist);
@@ -737,6 +828,7 @@ my ($rule, $rerr) = &ip_rule_lines($gid, $list, "phase:1,pass,nolog",
 $rule || return (0, $rerr);
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - trusted IP whitelist.",
+	&ip_source_header_comment(),
 	"# virtualmin-modsec-ipwhitelist: $list",
 	@$rule);
 return &write_test_rollback($f, \@lines, $old);
@@ -796,6 +888,7 @@ my ($rule, $rerr) = &ip_rule_lines($gid, $list,
 $rule || return (0, $rerr);
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - IP blocklist.",
+	&ip_source_header_comment(),
 	"# virtualmin-modsec-ipblocklist: $list",
 	@$rule);
 return &write_test_rollback($f, \@lines, $old);

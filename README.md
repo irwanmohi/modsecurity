@@ -389,6 +389,50 @@ your system differs from the defaults:
 
 ## Changelog
 
+### 0.24 — `xff` mode never worked under `mod_remoteip`
+
+**If this server runs `mod_remoteip` — the normal configuration behind a reverse
+proxy — then any IP whitelist or blocklist configured with
+`client_ip_source = xff` was inert.** Re-check those lists after upgrading.
+
+`mod_remoteip` consumes `X-Forwarded-For` and removes it from the request
+*before* ModSecurity's phase 1 runs, so rules matching
+`REQUEST_HEADERS:X-Forwarded-For` can never fire. The mode was also unnecessary
+there: `mod_remoteip` has already replaced `REMOTE_ADDR` with the genuine client
+address, so `remote_addr` is not a fallback but the correct source.
+
+The failure had the same shape as 0.23 — the UI showed the list, the config file
+contained the rule, Apache accepted it, and it protected nobody.
+
+**What changed.** The module now detects `mod_remoteip` (loaded *and* configured
+with a `RemoteIPHeader`; loaded alone does nothing) and, when it is active,
+matches on `REMOTE_ADDR` regardless of the configured mode. Overriding an
+explicit setting is not something to do quietly, so it is stated on the IP pages
+and written into the generated file's header comment. `xff` mode is unchanged
+and still correct on servers without `mod_remoteip`, chained proxy check
+included — this release is about detecting when it cannot work, not removing it.
+
+As in 0.23, **upgrading does not rewrite rules already on disk.** Re-save the IP
+whitelist and blocklist from the UI, then confirm what was written:
+
+```bash
+grep -E 'REMOTE_ADDR|X-Forwarded-For' /etc/modsecurity/virtualmin-modsec-ip*.conf
+```
+
+To check whether your server is affected, send one request carrying a forwarded
+header plus an arbitrary marker, then read section B of the audit log. If the
+marker appears and `X-Forwarded-For` does not, `mod_remoteip` consumed it:
+
+```bash
+curl -s -o /dev/null -H 'X-Forwarded-For: 203.0.113.99' -H 'X-Probe: abc123' https://<site>/
+grep -A20 -- '-B--' /var/log/apache2/modsec_audit.log | tail -25
+```
+
+Guarded by `tests/remoteip-detection.t`, which exercises the real search against
+a symlinked config directory — `grep -r` skips symlinks while recursing and
+`conf-enabled/` is a directory of them, so a search written that way reports
+"not configured" on a server where it plainly is.
+
 ### 0.23 — security fix, upgrade required
 
 **Versions 0.18 to 0.22 did not enforce ModSecurity as configured** in two

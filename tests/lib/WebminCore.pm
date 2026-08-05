@@ -6,6 +6,9 @@ package WebminCore;
 
 my %CACHE;
 
+# Set by tests to a coderef taking the command string and returning its output.
+our $BACKQUOTE;
+
 sub import
 {
 my $c = caller;
@@ -43,7 +46,13 @@ no strict 'refs';
 	};
 *{"${c}::print_tempfile"}   = sub { print {$_[0]} $_[1]; };
 *{"${c}::close_tempfile"}   = sub { close($_[0]); };
-*{"${c}::backquote_command"} = sub { $? = 0; return ""; };
+*{"${c}::backquote_command"} = sub {
+	# Tests set $WebminCore::BACKQUOTE to fake (or pass through) shell output,
+	# which is how the mod_remoteip detection gets exercised without Apache.
+	return $WebminCore::BACKQUOTE->($_[0]) if ($WebminCore::BACKQUOTE);
+	$? = 0;
+	return "";
+	};
 *{"${c}::backquote_logged"}  = sub { $? = 0; return ""; };
 *{"${c}::foreign_check"}     = sub { return 0; };
 *{"${c}::foreign_require"}   = sub { };
