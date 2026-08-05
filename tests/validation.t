@@ -170,6 +170,54 @@ ok(&valid_domain_name('skm.gov.my') && !&valid_domain_name('a"b.com') &&
    !&valid_domain_name(''),
    "valid_domain_name accepts a real host and rejects quotes, spaces, newlines");
 
+# --- clearing an IP list must still leave a restorable backup -------------
+# The other two writers back up before unlinking. Clearing a whitelist is
+# exactly the change you would want to undo, so it must not be the one case
+# that leaves nothing in the Backups page.
+foreach my $pair ([ 'ip_whitelist_file', \&set_ip_whitelist, 'whitelist' ],
+		  [ 'ip_blocklist_file', \&set_ip_blocklist, 'blocklist' ]) {
+	my ($key, $fn, $label) = @$pair;
+	$main::config{$key} = "$tmp/$label.conf";
+	system("rm -rf ".quotemeta("$tmp/backups"));
+	$fn->([ "203.0.113.5" ]);              # create it
+	$fn->([]);                             # clear it
+	my @b = grep { /^$label\.conf\./ }
+		map { $_->{'name'} } &list_backups();
+	ok(scalar(@b) > 0, "clearing the IP $label leaves a backup to restore");
+	ok(!-e "$tmp/$label.conf", "  ...and removes the live file");
+	}
+
+# --- a path must not carry a ModSecurity macro ----------------------------
+# The path is interpolated into @beginsWith, whose argument is macro-expanded,
+# so %{...} would be substituted at request time rather than matched literally.
+ok(&valid_engine_path('/administrator/'), "a normal path is accepted");
+ok(!&valid_engine_path('/admin%{tx.foo}/'), "a path carrying a macro is rejected");
+ok(!&valid_engine_path('/admin%{'), "a path with a bare macro opener is rejected");
+
+# --- CRS update must use the configured package manager -------------------
+# platform_adjust switches pkg_install to dnf/yum on the RHEL family, so an
+# update path that hardcodes apt-get simply fails there.
+my @cmds;
+my $prev = $WebminCore::BACKQUOTE;
+$WebminCore::BACKQUOTE = sub { push(@cmds, $_[0]); $? = 0; return ""; };
+$main::config{'pkg_install'} = "dnf install -y";
+$main::config{'crs_pkg'}     = "mod_security_crs";
+$main::config{'crs_setup'}   = "$tmp/crs-setup.conf";
+system("echo '# crs' > ".quotemeta("$tmp/crs-setup.conf"));
+&update_crs_apt();
+$WebminCore::BACKQUOTE = $prev;
+my $all = join(" | ", @cmds);
+ok($all !~ /apt-get/, "CRS update does not hardcode apt-get");
+ok($all =~ /dnf/, "CRS update uses the configured package manager");
+
+# --- backups must not sit where Apache scans for configuration ------------
+$main::config{'exclusion_file'} = "/etc/modsecurity/virtualmin-modsec-exclusions.conf";
+$main::config{'backup_dir'}     = "/etc/modsecurity/virtualmin-modsec-backups";
+ok(&backup_dir_hazard(), "a backup dir inside the Apache-scanned tree is flagged");
+$main::config{'backup_dir'}     = "/var/lib/virtualmin-modsec/backups";
+ok(!&backup_dir_hazard(), "a backup dir outside that tree is not flagged");
+$main::config{'backup_dir'}     = "$tmp/backups";
+
 print "\n1..$count\n";
 if ($fails) { print "FAILED $fails of $count\n"; exit(1); }
 print "All $count checks passed\n";

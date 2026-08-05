@@ -389,6 +389,38 @@ your system differs from the defaults:
 
 ## Changelog
 
+### 0.26 — audit fixes
+
+Five defects found in a code audit, plus verification of the parser and the
+0.13 log de-duplication against a live Virtualmin server.
+
+- **"Update CRS" was broken on AlmaLinux/CentOS/RHEL.** `update_crs_apt()`
+  hardcoded `apt-get` even though the platform detection added in 0.14 switches
+  the package manager to `dnf`/`yum`. It now uses whatever `pkg_install` was
+  resolved to, as `install_crs()` already did.
+- **Clearing an IP whitelist or blocklist deleted the file with no backup**, so
+  it could not be restored from the Backups page — while the per-domain and
+  per-path writers both backed up first. Clearing a list is exactly the change
+  you would want to undo.
+- **A path could carry a ModSecurity macro.** `valid_engine_path()` rejected
+  quotes, backslashes and whitespace but allowed `%`, and `@beginsWith`
+  macro-expands its argument, so `%{tx.something}` would be substituted at
+  request time rather than matched literally. Now rejected.
+- **The backup directory sat inside the directory Apache scans.** The default
+  was `/etc/modsecurity/virtualmin-modsec-backups`; retained backups were
+  ignored only because their names end in a timestamp and the stock include is
+  `*.conf`. Change either and every backup becomes live configuration with
+  duplicate rule IDs, which stops Apache starting. The shipped default is now
+  `/var/lib/virtualmin-modsec/backups`, and the Backups page warns when the
+  configured directory is inside the scanned tree.
+- `acl_security.pl` no longer loads the whole library, which was running
+  platform detection on the ACL page for no reason.
+
+**Existing installations keep their configured backup directory** — Webmin
+preserves module config, so only new installs get the safer default. If the
+Backups page shows the warning, move it under Module Config; existing backups
+can be moved with it.
+
 ### 0.25 — input validation, ACLs, and write safety
 
 **Per-domain engine rules were generated without validating the domain name.**

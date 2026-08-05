@@ -852,6 +852,9 @@ foreach my $ip (@$ips) {
 my $f = $config{'ip_whitelist_file'};
 my $old = -r $f ? &read_file_contents($f) : undef;
 if (!@clean) {
+	# Back up before removing: clearing a list is exactly the change
+	# you would want to undo, and the other writers already do this.
+	&backup_file($f);
 	unlink($f) if (-e $f);
 	return &apply_changes();
 	}
@@ -912,6 +915,9 @@ foreach my $ip (@$ips) {
 my $f = $config{'ip_blocklist_file'};
 my $old = -r $f ? &read_file_contents($f) : undef;
 if (!@clean) {
+	# Back up before removing: clearing a list is exactly the change
+	# you would want to undo, and the other writers already do this.
+	&backup_file($f);
 	unlink($f) if (-e $f);
 	return &apply_changes();
 	}
@@ -1167,7 +1173,32 @@ return &write_test_rollback($f, \@lines, $old);
 # backslashes and whitespace that would break out of the SecRule argument.
 sub valid_engine_path
 {
-return $_[0] =~ m{^/[^"'\\\s]*$} ? 1 : 0;
+my ($p) = @_;
+return 0 if (!defined $p);
+# No % either: the path is interpolated into @beginsWith, and ModSecurity
+# macro-expands operator arguments, so %{tx.something} would be substituted at
+# request time instead of matched literally. Quotes, backslash and whitespace
+# would break the rule's own syntax.
+return $p =~ m{^/[^"'\\\s%]*$} ? 1 : 0;
+}
+
+# backup_dir_hazard()
+# True when the backup directory sits inside the directory Apache scans for
+# ModSecurity configuration -- the same place the module's own rule files live,
+# because that is what makes them load. Backups survive there only because they
+# are named with a trailing timestamp and the stock include is *.conf. Change
+# either and every retained backup becomes live configuration with duplicate
+# rule ids, which stops Apache starting. Cheap to detect, so the Backups page
+# says so rather than leaving it to be discovered during an outage.
+sub backup_dir_hazard
+{
+my $bdir = $config{'backup_dir'};
+my $excl = $config{'exclusion_file'};
+return 0 if (!$bdir || !$excl);
+my ($scanned) = $excl =~ m{^(.*)/[^/]+$};
+return 0 if (!$scanned);
+$bdir =~ s{/+$}{};
+return ($bdir eq $scanned || index($bdir, "$scanned/") == 0) ? 1 : 0;
 }
 
 # list_path_engine()
@@ -1355,14 +1386,32 @@ return 0;
 # update_crs_apt()
 # Refresh the package list and upgrade the CRS package only, then make sure
 # crs-setup.conf exists and reload. Returns (1) or (0, error).
+#
+# Uses whatever package manager the platform detection settled on rather than
+# assuming apt. install_crs already did this; this function did not, so on the
+# RHEL family -- where platform_adjust switches pkg_install to dnf or yum --
+# the Update CRS button ran apt-get and simply failed.
 sub update_crs_apt
 {
-&backquote_logged("apt-get update -y 2>&1");
-my $o = &backquote_logged(
-	"DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y ".
-	"$config{'crs_pkg'} 2>&1");
-if ($? != 0) {
-	return (0, "CRS package upgrade failed:\n$o");
+my ($pm) = split(/\s+/, $config{'pkg_install'});
+$pm ||= "apt-get";
+if ($pm eq "apt-get" || $pm eq "apt") {
+	&backquote_logged("$pm update -y 2>&1");
+	my $o = &backquote_logged("DEBIAN_FRONTEND=noninteractive $pm ".
+				  "install --only-upgrade -y ".
+				  quotemeta($config{'crs_pkg'})." 2>&1");
+	if ($? != 0) {
+		return (0, "CRS package upgrade failed:\n$o");
+		}
+	}
+else {
+	# dnf/yum upgrade a named package in one step and refresh metadata
+	# themselves, so there is no separate update call.
+	my $o = &backquote_logged("$pm upgrade -y ".
+				  quotemeta($config{'crs_pkg'})." 2>&1");
+	if ($? != 0) {
+		return (0, "CRS package upgrade failed:\n$o");
+		}
 	}
 &ensure_crs_setup();
 return &apply_changes();

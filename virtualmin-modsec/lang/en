@@ -104,6 +104,7 @@ bk_restore=Restore
 bk_return=backups
 bk_rusure=Restore backup $1 over the current file? Apache will be tested and reloaded.
 bk_err=Failed to restore backup
+bk_hazard=Backups are kept in $1, which is inside the directory Apache scans for ModSecurity configuration. They are ignored today only because their names end in a timestamp and the stock include is *.conf — change either and every retained backup becomes live configuration with duplicate rule IDs, which stops Apache starting. Move "Directory to keep config backups" somewhere outside that tree, such as /var/lib/virtualmin-modsec/backups, under Module Config.
 
 dom_title=Per-Domain Engine Mode
 dom_intro=Override the ModSecurity engine mode for individual virtual servers. "Default" means the domain follows the global engine setting.

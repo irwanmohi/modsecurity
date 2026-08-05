@@ -8,6 +8,11 @@ require './modsec-lib.pl';
 
 my @b = &list_backups();
 print "<p>",$text{'bk_intro'},"</p>\n";
+if (&backup_dir_hazard()) {
+	print "<p><font color=#cc8800><b>",
+	      &text('bk_hazard', "<tt>".&html_escape($config{'backup_dir'})."</tt>"),
+	      "</b></font></p>\n";
+	}
 
 if (!@b) {
 	print "<p>",$text{'bk_none'},"</p>\n";

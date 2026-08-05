@@ -7,7 +7,6 @@
 # which matters here, because this module rewrites Apache configuration that
 # Apache parses as root.
 
-do 'modsec-lib.pl';
 
 # acl_security_form(\%access)
 # Emit the per-user rights form.

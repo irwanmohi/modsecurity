@@ -53,11 +53,30 @@ no strict 'refs';
 	$? = 0;
 	return "";
 	};
-*{"${c}::backquote_logged"}  = sub { $? = 0; return ""; };
+*{"${c}::backquote_logged"} = sub {
+	# Same hook as backquote_command: package installs go through this one,
+	# so a test that only intercepted the other would capture nothing and
+	# pass without exercising anything.
+	return $WebminCore::BACKQUOTE->($_[0]) if ($WebminCore::BACKQUOTE);
+	$? = 0;
+	return "";
+	};
 *{"${c}::foreign_check"}     = sub { return 0; };
 *{"${c}::foreign_require"}   = sub { };
-*{"${c}::make_dir"}          = sub { mkdir($_[0]); };
-*{"${c}::copy_source_dest"}  = sub { };
+*{"${c}::make_dir"} = sub { mkdir($_[0]); };
+# Real copy, not a no-op: the backup behaviour is one of the things under test,
+# and a stub that quietly does nothing would let a missing backup pass.
+*{"${c}::copy_source_dest"} = sub {
+	my ($src, $dst) = @_;
+	open(my $i, "<", $src) || return;
+	open(my $o, ">", $dst) || do { close($i); return; };
+	binmode($i); binmode($o);
+	local $/;
+	my $data = <$i>;
+	print $o $data;
+	close($o);
+	close($i);
+	};
 *{"${c}::get_module_info"}   = sub { return (); };
 *{"${c}::config"} = \%{"${c}::config"};
 *{"${c}::access"} = \%{"${c}::access"};
