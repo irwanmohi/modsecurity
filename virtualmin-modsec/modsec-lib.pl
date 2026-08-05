@@ -634,28 +634,40 @@ return 1 if ($ip =~ /:/ && $ip =~ /^[0-9a-fA-F:]+(\/\d{1,3})?$/); # IPv6
 return 0;
 }
 
-# ip_rule_lines($gid, $list, $actions)
-# Build the SecRule lines that match the visitor's IP against $list and apply
-# $actions. Behind a reverse proxy (HAProxy, nginx, a load balancer) REMOTE_ADDR
-# is the proxy's address, not the visitor's, so plain REMOTE_ADDR rules never
-# match -- whitelists let nobody through and blocklists stop nobody. In "xff"
-# mode we chain two conditions: first prove the request really arrived from a
-# trusted proxy, then match the forwarded client IP. The proxy check is not
-# optional -- matching X-Forwarded-For alone would let anyone spoof that header
-# to bypass the WAF (whitelist) or dodge a block.
+# ip_rule_lines($gid, $list, $rule_actions, $ctl)
+# Build the SecRule lines that match the visitor's IP against $list. Behind a
+# reverse proxy (HAProxy, nginx, a load balancer) REMOTE_ADDR is the proxy's
+# address, not the visitor's, so plain REMOTE_ADDR rules never match --
+# whitelists let nobody through and blocklists stop nobody. In "xff" mode we
+# chain two conditions: first prove the request really arrived from a trusted
+# proxy, then match the forwarded client IP. The proxy check is not optional --
+# matching X-Forwarded-For alone would let anyone spoof that header to bypass
+# the WAF (whitelist) or dodge a block.
+#
+# $ctl is a separate argument, deliberately. See the chain-action note above
+# write_path_engine: a non-disruptive action fires the moment the rule carrying
+# it matches, so ctl:ruleEngine=Off on the chain starter here would disable the
+# engine for every request arriving through the proxy -- a total WAF bypass,
+# since the starter tests the proxy's own address. It must ride on the final
+# link, the one testing the client IP. Disruptive actions behave the opposite
+# way: deny waits for the whole chain, so the blocklist correctly leaves it in
+# $rule_actions and passes no $ctl at all.
 # Returns (\@lines) on success, or (undef, $error).
 sub ip_rule_lines
 {
-my ($gid, $list, $actions) = @_;
+my ($gid, $list, $rule_actions, $ctl) = @_;
+$ctl = "" if (!defined $ctl);
 if (&client_ip_source() ne 'xff') {
+	# One unchained rule, so everything can sit on it safely.
 	return ([ "SecRule REMOTE_ADDR \"\@ipMatch $list\" \\",
-		  "    \"id:$gid,$actions\"" ]);
+		  "    \"id:$gid,$rule_actions".($ctl ? ",$ctl" : "")."\"" ]);
 	}
 my ($plist, $perr) = &trusted_proxy_list();
 $plist || return (undef, $perr);
 return ([ "SecRule REMOTE_ADDR \"\@ipMatch $plist\" \\",
-	  "    \"id:$gid,$actions,chain\"",
-	  "    SecRule REQUEST_HEADERS:X-Forwarded-For \"\@ipMatch $list\"" ]);
+	  "    \"id:$gid,$rule_actions,chain\"",
+	  "    SecRule REQUEST_HEADERS:X-Forwarded-For \"\@ipMatch $list\"".
+	  ($ctl ? " \"$ctl\"" : "") ]);
 }
 
 # client_ip_source()
@@ -720,8 +732,8 @@ if (!@clean) {
 	}
 my $gid = ($config{'id_base'} || 9000000) + 200000;
 my $list = join(",", @clean);
-my ($rule, $rerr) = &ip_rule_lines($gid, $list,
-				   "phase:1,pass,nolog,ctl:ruleEngine=Off");
+my ($rule, $rerr) = &ip_rule_lines($gid, $list, "phase:1,pass,nolog",
+				   "ctl:ruleEngine=Off");
 $rule || return (0, $rerr);
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - trusted IP whitelist.",
@@ -1057,6 +1069,18 @@ return @out;
 # write_path_engine(\@entries)
 # Rebuild the per-path file from scratch. Each entry needs domain (possibly
 # empty), path and mode. Returns (1) or (0, error).
+#
+# CHAIN ACTIONS -- read before touching the rule below.
+# In ModSecurity 2.x a non-disruptive action (ctl, setvar, t:) executes the
+# moment the rule *carrying it* matches. It does NOT wait for the rest of the
+# chain. Only disruptive actions (deny, block, drop, redirect) are deferred
+# until every link matches. So ctl:ruleEngine must go on the LAST link, the one
+# testing the path. Putting it on the chain starter, which tests only the Host
+# header, silently applies the mode to the entire site whatever the path.
+# That shipped in v0.18-v0.22 and left a production portal unenforced for over
+# a week while both the config file and the UI reported the engine as On.
+# A chained link must not carry id or phase; ctl is exactly what belongs there.
+# tests/generated-rules.t asserts this and fails if it regresses.
 sub write_path_engine
 {
 my ($ents) = @_;
@@ -1084,9 +1108,9 @@ foreach my $e (@$ents) {
 	if ($dom) {
 		push(@lines, "SecRule REQUEST_HEADERS:Host \"".
 	     &host_match_op($dom)."\" \\");
-		push(@lines, "    \"id:$gid,phase:1,pass,nolog,".
-			     "ctl:ruleEngine=$mode,chain\"");
-		push(@lines, "    SecRule REQUEST_URI \"\@beginsWith $path\"");
+		push(@lines, "    \"id:$gid,phase:1,pass,nolog,chain\"");
+		push(@lines, "    SecRule REQUEST_URI \"\@beginsWith $path\" ".
+			     "\"ctl:ruleEngine=$mode\"");
 		}
 	else {
 		push(@lines, "SecRule REQUEST_URI \"\@beginsWith $path\" \\");

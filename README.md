@@ -387,6 +387,58 @@ your system differs from the defaults:
 
 ---
 
+## Changelog
+
+### 0.23 — security fix, upgrade required
+
+**Versions 0.18 to 0.22 did not enforce ModSecurity as configured** in two
+cases. Both were silent: Apache accepted the config, the config file said
+`SecRuleEngine On`, and the UI agreed.
+
+In ModSecurity 2.x a non-disruptive action (`ctl`, `setvar`, `t:`) executes as
+soon as the rule *carrying it* matches — it does not wait for the rest of a
+chain. Only disruptive actions (`deny`, `block`, `drop`) are deferred. This
+module put `ctl:ruleEngine=…` on chain starters, so the second condition
+stopped gating anything.
+
+| Affected | Effect |
+|---|---|
+| **Per-path engine mode with a domain set** | The mode applied to the whole site, not just the path. A `/administrator/` entry set to DetectionOnly left the entire site unenforced. |
+| **IP whitelist with `client_ip_source=xff`** | The chain starter tested the *proxy's* address, true for every proxied request, so `ctl:ruleEngine=Off` fired on all traffic — a complete WAF bypass. |
+
+The IP **blocklist** was not affected: it uses `deny`, which is disruptive and
+correctly deferred until the whole chain matches.
+
+**Upgrading the module is not enough.** The bad rules are already written to
+disk and are not rewritten until something regenerates them. After updating,
+re-save each per-path entry and the IP whitelist from the UI, then confirm on
+disk that no line ending in `,chain"` contains `ctl:`:
+
+```bash
+grep -A2 'chain"' /etc/modsecurity/virtualmin-modsec-*.conf
+```
+
+Verify enforcement from the audit log rather than the config file or the UI —
+it is the only place that reports the engine state *after* all `ctl` actions
+have been applied:
+
+```bash
+grep Engine-Mode /var/log/apache2/modsec_audit.log | tail
+```
+
+Send the same payload to a host that matches a configured domain and to one
+that does not, on a path *outside* any configured path. Both should now report
+`ENABLED`. Two traps when testing: put the payload in a POST body or
+`User-Agent`, not a query string (Joomla's stock `.htaccess` blocks `<script>`
+in query strings itself and returns 403 before ModSecurity rules), and use
+`grep -R` rather than `grep -r` on Apache config, since `sites-enabled/*.conf`
+are symlinks that `-r` skips.
+
+`tests/generated-rules.t` now asserts the invariant. Run it with
+`perl tests/generated-rules.t`.
+
+---
+
 ## Troubleshooting
 
 ### Apache won't start after installing the CRS
