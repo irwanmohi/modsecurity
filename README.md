@@ -389,6 +389,44 @@ your system differs from the defaults:
 
 ## Changelog
 
+### 0.25 — input validation, ACLs, and write safety
+
+**Per-domain engine rules were generated without validating the domain name.**
+Review `/etc/modsecurity/virtualmin-modsec-domains.conf` for anything you did
+not intend before upgrading — a name that escaped its quoting would appear there
+as extra Apache directives.
+
+Apache parses that file as root at config load, so an unvalidated name was
+arbitrary Apache configuration written by anyone who could reach the per-domain
+form. The sibling function `write_path_engine` had always validated; only
+`write_domain_engine` and its CGI were missing the check. Both now use one
+shared `valid_domain_name()`, and `host_match_op()` refuses a name it cannot
+safely turn into a pattern rather than escaping only the dot.
+
+Also in this release:
+
+- `write_domain_engine` now tests and rolls back like every other writer. A
+  rejected config no longer stays on disk waiting for the next Apache restart
+  to fail.
+- **`acl_security.pl` added.** Without it Webmin rendered no ACL form, so the
+  rights the code checks could never be granted or revoked and every check
+  passed for anyone holding the module. They are now editable per user.
+- The `view` right is enforced on the nine read-only pages, which previously
+  showed log contents, visitor IPs and the full IP lists to any user.
+- State-changing pages require POST, and removing an exclusion or path rule now
+  asks for confirmation instead of acting on a bare link.
+- Module config values are HTML-escaped on the Logs page.
+
+**Default rights are unchanged** — `view`, `allow`, `remove` and `toggle` are
+still granted by `defaultacl`. Restricting them by default would lock existing
+administrators out of their own WAF controls on upgrade, which is its own risk;
+in Webmin's model, assigning a user the module is the authorisation step. The
+change that matters is that they can now be restricted at all. If you grant this
+module to anyone beyond your administrators, set their rights explicitly.
+
+As always, **upgrading does not rewrite rules already on disk.** Re-save the
+per-domain engine modes from the UI to regenerate that file.
+
 ### 0.24 — `xff` mode never worked under `mod_remoteip`
 
 **If this server runs `mod_remoteip` — the normal configuration behind a reverse

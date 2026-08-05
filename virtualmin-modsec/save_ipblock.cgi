@@ -4,7 +4,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
-&error_setup($text{'ipbl_err'});
+&require_post();
 &can_access("toggle") || &error($text{'eng_eacl'});
 
 my @ips = split(/[\s,]+/, $in{'ips'});

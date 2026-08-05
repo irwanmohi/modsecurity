@@ -5,6 +5,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
+&can_access("view") || &error($text{'err_eview'});
 &ui_print_header(undef, $text{'index_title'}, "", "intro", 1, 1);
 
 # --- Engine status banner ---

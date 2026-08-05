@@ -4,7 +4,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
-&error_setup($text{'path_err'});
+&require_post();
 &can_access("toggle") || &error($text{'eng_eacl'});
 
 my ($ok, $err) = &add_path_engine($in{'domain'}, $in{'path'}, $in{'mode'});

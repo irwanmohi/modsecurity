@@ -4,7 +4,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
-&error_setup($text{'ip_err'});
+&require_post();
 &can_access("toggle") || &error($text{'eng_eacl'});
 
 # Accept IPs separated by newlines, spaces or commas.

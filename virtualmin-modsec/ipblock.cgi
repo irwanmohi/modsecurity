@@ -4,6 +4,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
+&can_access("view") || &error($text{'err_eview'});
 &ui_print_header(undef, $text{'ipbl_title'}, "");
 
 my @ips = &get_ip_blocklist();

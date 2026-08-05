@@ -5,6 +5,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
+&can_access("view") || &error($text{'err_eview'});
 &ui_print_header(undef, $text{'logs_title'}, "");
 
 my @logs = &log_files();
@@ -15,9 +16,12 @@ print "<p>",&text('logs_intro', scalar(@logs)),"</p>\n";
 my $plat = &has_command("apache2ctl") ? "apache2 (Debian/Ubuntu)" : "httpd (RHEL family)";
 print &ui_table_start($text{'logs_platform'}, "width=100%", 2);
 print &ui_table_row($text{'logs_detected'}, "<b>$plat</b>");
-print &ui_table_row($text{'logs_reload'}, "<tt>$config{'apache_reload'}</tt>");
-print &ui_table_row($text{'logs_modsec'}, "<tt>$config{'modsec_conf'}</tt>");
-print &ui_table_row($text{'logs_excl'},   "<tt>$config{'exclusion_file'}</tt>");
+print &ui_table_row($text{'logs_reload'},
+	"<tt>".&html_escape($config{'apache_reload'})."</tt>");
+print &ui_table_row($text{'logs_modsec'},
+	"<tt>".&html_escape($config{'modsec_conf'})."</tt>");
+print &ui_table_row($text{'logs_excl'},
+	"<tt>".&html_escape($config{'exclusion_file'})."</tt>");
 print &ui_table_end();
 
 my @rows;

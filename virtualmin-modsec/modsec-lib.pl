@@ -79,6 +79,17 @@ sub can_access
 return $access{$_[0]};
 }
 
+# require_post()
+# Refuse a state-changing request that did not arrive by POST. Webmin's
+# miniserv already checks the Referer, which is what actually blocks CSRF here;
+# this makes the module safe on its own rather than relying entirely on a
+# server setting it does not control, and it stops a change being triggered by
+# a bare link.
+sub require_post
+{
+$ENV{'REQUEST_METHOD'} eq 'POST' || &error($text{'err_post'});
+}
+
 # module_version()
 # This module's own version, shown on the dashboard so you can tell at a glance
 # which build a server is running -- useful when a feature is missing simply
@@ -337,9 +348,29 @@ return sort @doms;
 sub host_match_op
 {
 my ($dom) = @_;
+$dom = "" if (!defined $dom);
 $dom =~ s/^www\.//i;         # normalise, so either form yields one pattern
-$dom =~ s/\./\\./g;          # the only regex metacharacter a hostname can hold
+# Refuse rather than escape. Escaping only the dot was safe by accident: two of
+# the three callers happened to validate first. Anything else here would either
+# break out of the quoted operator or act as a regex metacharacter and silently
+# widen or narrow what the rule matches -- and a rule that matches the wrong
+# hosts is exactly the failure this module keeps having. Callers still validate;
+# this is the backstop, and it fails loudly instead of guessing.
+return undef if (!&valid_domain_name($dom));
+$dom =~ s/\./\\./g;          # the only metacharacter a valid hostname can hold
 return '@rx ^(?:www\.)?'.$dom.'(?::\d+)?$';
+}
+
+# valid_domain_name($d)
+# The single definition of what may be used as a site name in a generated rule.
+# Apache parses these files as root at config load, so a name that escapes its
+# quoting is arbitrary Apache configuration written by whoever can reach the
+# form. Everything that builds or accepts a domain goes through here.
+sub valid_domain_name
+{
+my ($d) = @_;
+return 0 if (!defined $d || $d eq "" || length($d) > 253);
+return $d =~ /^[A-Za-z0-9][A-Za-z0-9._-]*$/ ? 1 : 0;
 }
 
 # list_exclusions()
@@ -395,7 +426,9 @@ my ($ruleid, $domain, $target) = @_;
 $domain = "" if (!defined $domain);
 $target = "" if (!defined $target);
 $ruleid =~ /^\d+$/ || return (0, "Invalid rule id");
-$domain =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain");
+# An empty domain means "all sites" here, so only a non-empty one is checked.
+$domain ne "" && !&valid_domain_name($domain) &&
+	return (0, "Invalid domain: $domain");
 $target ne "" && $target !~ /^[A-Za-z0-9_:\-\.\[\]]+$/ &&
 	return (0, "Invalid target");
 my $f = $config{'exclusion_file'};
@@ -411,8 +444,9 @@ push(@lines, "");
 push(@lines, "# virtualmin-modsec: domain=$domain ruleid=$ruleid".
 	     ($target ne "" ? " target=$target" : ""));
 if ($domain) {
-	push(@lines, "SecRule REQUEST_HEADERS:Host \"".
-		     &host_match_op($domain)."\" \\");
+	my $host = &host_match_op($domain);
+	$host || return (0, "Invalid domain: $domain");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"$host\" \\");
 	push(@lines, "    \"id:$gid,phase:1,pass,nolog,$ctl\"");
 	}
 else {
@@ -1086,11 +1120,12 @@ sub write_domain_engine
 {
 my ($map) = @_;
 my $f = $config{'domain_engine_file'};
+my $old = -r $f ? &read_file_contents($f) : undef;
 my @active = grep { $map->{$_} && $map->{$_} ne 'default' } keys %$map;
-&backup_file($f);
 if (!@active) {
+	&backup_file($f);
 	unlink($f) if (-e $f);
-	return 1;
+	return &apply_changes();
 	}
 my @lines = (
 	"# Managed by Virtualmin ModSecurity Manager - per-domain engine modes.",
@@ -1099,19 +1134,23 @@ my @lines = (
 my $gid = ($config{'id_base'} || 9000000) + 100000;
 foreach my $dom (sort @active) {
 	my $mode = $map->{$dom};
-	next if ($mode !~ /^(On|Off|DetectionOnly)$/);
+	# Reject rather than skip. A silently dropped entry looks to the user
+	# exactly like one that was applied, which is the failure mode this
+	# module has repeatedly shipped.
+	$mode =~ /^(On|Off|DetectionOnly)$/ ||
+		return (0, "Invalid mode for $dom: $mode");
+	&valid_domain_name($dom) || return (0, "Invalid domain: $dom");
+	my $host = &host_match_op($dom);
+	$host || return (0, "Invalid domain: $dom");
 	push(@lines, "");
 	push(@lines, "# virtualmin-modsec-engine: domain=$dom mode=$mode");
-	push(@lines, "SecRule REQUEST_HEADERS:Host \"".
-	     &host_match_op($dom)."\" \\");
+	push(@lines, "SecRule REQUEST_HEADERS:Host \"$host\" \\");
 	push(@lines, "    \"id:$gid,phase:1,pass,nolog,ctl:ruleEngine=$mode\"");
 	$gid++;
 	}
-&ensure_parent_dir($f);
-&open_tempfile(my $FH, ">$f", 1) || return (0, "Cannot write $f");
-&print_tempfile($FH, join("\n", @lines)."\n");
-&close_tempfile($FH);
-return 1;
+# Test and roll back like every other writer, so a rejected config never
+# survives on disk waiting for the next Apache restart to fail.
+return &write_test_rollback($f, \@lines, $old);
 }
 
 # --- Per-path engine mode ------------------------------------------------
@@ -1195,12 +1234,15 @@ foreach my $e (@$ents) {
 	$dom = "" if (!defined $dom);
 	$mode =~ /^(On|Off|DetectionOnly)$/ || return (0, "Invalid mode: $mode");
 	&valid_engine_path($path) || return (0, "Invalid path: $path");
-	$dom =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain: $dom");
+	# Empty means "all sites", so only a non-empty domain is checked.
+	$dom ne "" && !&valid_domain_name($dom) &&
+		return (0, "Invalid domain: $dom");
 	push(@lines, "");
 	push(@lines, "# virtualmin-modsec-path: domain=$dom mode=$mode path=$path");
 	if ($dom) {
-		push(@lines, "SecRule REQUEST_HEADERS:Host \"".
-	     &host_match_op($dom)."\" \\");
+		my $host = &host_match_op($dom);
+		$host || return (0, "Invalid domain: $dom");
+		push(@lines, "SecRule REQUEST_HEADERS:Host \"$host\" \\");
 		push(@lines, "    \"id:$gid,phase:1,pass,nolog,chain\"");
 		push(@lines, "    SecRule REQUEST_URI \"\@beginsWith $path\" ".
 			     "\"ctl:ruleEngine=$mode\"");
@@ -1225,7 +1267,8 @@ $path =~ s/^\s+|\s+$//g;
 	return (0, "Path must start with / and contain no spaces or quotes, ".
 		   "for example /administrator/");
 $mode =~ /^(On|Off|DetectionOnly)$/ || return (0, "Invalid engine mode");
-$domain =~ /[^a-zA-Z0-9\.\-\_]/ && return (0, "Invalid domain");
+$domain ne "" && !&valid_domain_name($domain) &&
+	return (0, "Invalid domain: $domain");
 my @ents = grep { !($_->{'domain'} eq $domain && $_->{'path'} eq $path) }
 		&list_path_engine();
 push(@ents, { domain => $domain, path => $path, mode => $mode });
@@ -1248,7 +1291,7 @@ return &write_path_engine(\@ents);
 sub set_domain_engine
 {
 my ($domain, $mode) = @_;
-$domain =~ /^[a-zA-Z0-9\.\-\_]+$/ || return (0, "Invalid domain");
+&valid_domain_name($domain) || return (0, "Invalid domain: $domain");
 $mode =~ /^(default|On|Off|DetectionOnly)$/ || return (0, "Invalid mode");
 my %map = &list_domain_engine();
 if ($mode eq 'default') { delete $map{$domain}; }

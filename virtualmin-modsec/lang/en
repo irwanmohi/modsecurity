@@ -112,7 +112,23 @@ dom_default=Default (follow global)
 dom_manual=Add / set a domain manually
 dom_nodoms=No Virtualmin domains found. Use the manual entry below.
 dom_err=Failed to apply per-domain settings
-dom_badname=Invalid domain name
+dom_badname=Invalid domain name. Use letters, digits, dots, hyphens and underscores only.
+dom_badmode=Invalid engine mode
+
+err_post=This action must be submitted from the module's own form.
+err_eview=You are not allowed to view ModSecurity data
+
+exc_rusure=Remove exclusion $1? The rule it was suppressing starts applying again to this site, which may begin blocking requests that currently succeed.
+exc_return=applied exclusions
+
+path_rusure=Remove path rule $1? That path goes back to following the domain or global engine mode, which may start blocking an admin area that was deliberately left in Detection only.
+path_remove=Remove rule
+path_return=per-path engine mode
+
+acl_view=Can view blocked requests, logs and statistics?
+acl_allow=Can allow rules (add exclusions)?
+acl_remove=Can remove exclusions and backups?
+acl_toggle=Can change engine mode, CRS settings and IP lists?
 
 eng_title=Engine & Core Rule Set
 eng_err=Failed to apply settings

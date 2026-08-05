@@ -4,6 +4,7 @@
 
 require './modsec-lib.pl';
 &ReadParse();
+&can_access("view") || &error($text{'err_eview'});
 
 my $refresh = $in{'refresh'};
 $refresh = 5 if ($refresh !~ /^\d+$/);
